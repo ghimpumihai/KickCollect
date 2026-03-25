@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 export default function AuthPage() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+
   return (
     <main className="kc-root" style={{ minHeight: "100vh", position: "relative", overflow: "hidden" }}>
       <div
@@ -34,18 +39,57 @@ export default function AuthPage() {
             marginBottom: 12,
           }}
         >
-          Authentication Placeholder
+          {mode === "login" ? "Log In" : "Register"}
         </h1>
-        <p style={{ color: "#7a9b8a", fontSize: 16, lineHeight: 1.7, marginBottom: 28 }}>
-          Authentication is intentionally not implemented in this remediation pass. Use the direct
-          collection route to continue validating migration behavior.
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <button
+            type="button"
+            className={mode === "login" ? "kc-btn kc-btn-em kc-btn-sm" : "kc-btn kc-btn-ghost kc-btn-sm"}
+            onClick={() => setMode("login")}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            className={mode === "register" ? "kc-btn kc-btn-em kc-btn-sm" : "kc-btn kc-btn-ghost kc-btn-sm"}
+            onClick={() => setMode("register")}
+          >
+            Register
+          </button>
+        </div>
+        <p style={{ color: "#7a9b8a", fontSize: 16, lineHeight: 1.7, marginBottom: 18 }}>
+          {mode === "login"
+            ? "Welcome back. Continue to your collection dashboard."
+            : "Create an account to start collecting and tracking cards."}
         </p>
+        <form style={{ display: "grid", gap: 10, marginBottom: 22 }}>
+          <input
+            aria-label="Email"
+            type="email"
+            placeholder="Email"
+            style={{ borderRadius: 10, border: "1px solid var(--kc-border)", padding: "10px 12px", background: "rgba(17,24,39,.75)", color: "var(--kc-text)" }}
+          />
+          <input
+            aria-label="Password"
+            type="password"
+            placeholder="Password"
+            style={{ borderRadius: 10, border: "1px solid var(--kc-border)", padding: "10px 12px", background: "rgba(17,24,39,.75)", color: "var(--kc-text)" }}
+          />
+          {mode === "register" && (
+            <input
+              aria-label="Display Name"
+              type="text"
+              placeholder="Display Name"
+              style={{ borderRadius: 10, border: "1px solid var(--kc-border)", padding: "10px 12px", background: "rgba(17,24,39,.75)", color: "var(--kc-text)" }}
+            />
+          )}
+        </form>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href="/" className="kc-btn kc-btn-ghost">
             Back Home
           </Link>
           <Link href="/collection" className="kc-btn kc-btn-em">
-            Go to Collection
+            {mode === "login" ? "Continue to Collection" : "Create Account & Continue"}
           </Link>
         </div>
       </section>

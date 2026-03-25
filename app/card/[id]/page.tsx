@@ -14,6 +14,7 @@ import {
 
 import { Sidebar } from "@/components/Sidebar";
 import { useCardActions, useCards } from "@/lib/stores/card-context";
+import { useUserInsights } from "@/lib/stores/user-insights-context";
 import type { CardEntry, Condition, Position, Rarity } from "@/types/card";
 import { rarityColors } from "@/types/card";
 
@@ -90,6 +91,7 @@ export default function CardDetailPage() {
   const router = useRouter();
   const { cards, loading, error } = useCards();
   const { updateCard, deleteCard } = useCardActions();
+  const { recordActivity } = useUserInsights();
   const [modal, setModal] = useState<ModalType>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteSubmitError, setDeleteSubmitError] = useState<string | null>(null);
@@ -190,6 +192,7 @@ export default function CardDetailPage() {
         return;
       }
 
+      recordActivity(`Updated card: ${editForm.player}`);
       closeEditModal();
     } catch (caughtError) {
       setEditSubmitError(
@@ -233,6 +236,7 @@ export default function CardDetailPage() {
         return;
       }
 
+      recordActivity(`Deleted card: ${card.player}`);
       setConfirmDelete(false);
       router.push("/collection");
     } catch (caughtError) {
@@ -474,8 +478,8 @@ export default function CardDetailPage() {
                 </h2>
                 <div className="kc-glass-card" style={{ borderColor: "var(--kc-border)" }}>
                   <p style={{ margin: 0, color: "var(--kc-muted)", lineHeight: 1.6, fontSize: 14 }}>
-                    Edit, sell duplicate, and delete confirmation dialogs are intentionally lightweight shells in this
-                    migration step and will be fully wired in deeper CRUD tasks.
+                    Edit and delete are fully operational for the assignment CRUD scope. The sell duplicate dialog
+                    remains a lightweight shell for optional expansion.
                   </p>
                 </div>
               </section>

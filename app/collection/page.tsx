@@ -7,25 +7,29 @@ import {
 	type FormEvent,
 	type ReactNode,
 	useEffect,
+	useMemo,
 	useState,
 } from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Sidebar } from "@/components/Sidebar";
-import { useCardActions, useCards } from "@/lib/stores/card-context";
 import {
-	type Condition,
-	type Position,
-	type Rarity,
-	rarityColors,
-} from "@/types/card";
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import { useCardActions, useCards } from "@/lib/stores/card-context";
+import { useUserInsights } from "@/lib/stores/user-insights-context";
+import type { Condition, Position, Rarity } from "@/types/card";
 
 const positions: Position[] = ["GK", "DEF", "MID", "FWD"];
 const rarities: Rarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
 const conditions: Condition[] = ["Mint", "Near Mint", "Good", "Fair", "Poor"];
 const positionFilters: Array<Position | "All"> = ["All", ...positions];
 const rarityFilters: Array<Rarity | "All"> = ["All", ...rarities];
-const pageSize = 6;
-
 const fieldInputStyle: CSSProperties = {
 	width: "100%",
 	borderRadius: 10,
@@ -35,6 +39,26 @@ const fieldInputStyle: CSSProperties = {
 	padding: "10px 12px",
 	fontSize: 13,
 	lineHeight: 1.3,
+};
+
+const tableHeaderCellStyle: CSSProperties = {
+	textAlign: "left",
+	padding: "10px 12px",
+	fontSize: 11,
+	letterSpacing: 1.2,
+	textTransform: "uppercase",
+	color: "var(--kc-muted)",
+	fontFamily: "var(--kc-font-h)",
+	fontWeight: 600,
+	whiteSpace: "nowrap",
+};
+
+const tableCellStyle: CSSProperties = {
+	padding: "12px",
+	fontSize: 13,
+	color: "var(--kc-text)",
+	whiteSpace: "nowrap",
+	verticalAlign: "middle",
 };
 
 type CreateCardForm = {
@@ -98,6 +122,8 @@ function getErrorMessage(caughtError: unknown): string {
 export default function CollectionPage() {
 	const { cards, loading, error, refresh } = useCards();
 	const { createCard } = useCardActions();
+	const { preferences, setPageSizePreference, activity, recordActivity } =
+		useUserInsights();
 	const [showCreateModal, setShowCreateModal] = useState(false);
 	const [form, setForm] = useState<CreateCardForm>(() =>
 		createInitialFormState(),
@@ -109,6 +135,7 @@ export default function CollectionPage() {
 	const [posFilter, setPosFilter] = useState<Position | "All">("All");
 	const [showFav, setShowFav] = useState(false);
 	const [search, setSearch] = useState("");
+	const pageSize = preferences.pageSize;
 
 	const normalizedSearch = search.trim().toLowerCase();
 	const filteredCards = cards.filter((card) => {
@@ -140,6 +167,14 @@ export default function CollectionPage() {
 		currentPageStart,
 		currentPageStart + pageSize,
 	);
+	const chartData = useMemo(
+		() =>
+			rarities.map((rarity) => ({
+				rarity,
+				total: filteredCards.filter((card) => card.rarity === rarity).length,
+			})),
+		[filteredCards],
+	);
 
 	useEffect(() => {
 		setCurrentPage((previousPage) => {
@@ -162,21 +197,29 @@ export default function CollectionPage() {
 	const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
 		setSearch(event.target.value);
 		setCurrentPage(1);
+		recordActivity(`Updated search filter: "${event.target.value || "empty"}"`);
 	};
 
 	const handleRarityFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
 		setRarityFilter(event.target.value as Rarity | "All");
 		setCurrentPage(1);
+		recordActivity(`Changed rarity filter to ${event.target.value}`);
 	};
 
 	const handlePositionFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
 		setPosFilter(event.target.value as Position | "All");
 		setCurrentPage(1);
+		recordActivity(`Changed position filter to ${event.target.value}`);
 	};
 
 	const handleShowFavChange = (event: ChangeEvent<HTMLInputElement>) => {
 		setShowFav(event.target.checked);
 		setCurrentPage(1);
+		recordActivity(
+			event.target.checked
+				? "Enabled favourites-only filter"
+				: "Disabled favourites-only filter",
+		);
 	};
 
 	const openCreateModal = () => {
@@ -229,12 +272,14 @@ export default function CollectionPage() {
 			});
 
 			refresh();
+			recordActivity(`Created card: ${form.player}`);
 			closeCreateModal();
 		} catch (caughtError) {
 			setSubmitError(getErrorMessage(caughtError));
 			setSubmitting(false);
 		}
 	};
+
 
 	return (
 		<main className="kc-root" style={{ minHeight: "100vh", display: "flex" }}>
@@ -393,6 +438,36 @@ export default function CollectionPage() {
 							}}
 						>
 							<label
+								htmlFor="collection-page-size"
+								style={{
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 8,
+									color: "var(--kc-text)",
+									fontSize: 13,
+								}}
+							>
+								Rows per page
+								<select
+									id="collection-page-size"
+									value={pageSize}
+									onChange={(event) => {
+										const nextPageSize = Number(event.target.value);
+										setPageSizePreference(nextPageSize);
+										setCurrentPage(1);
+										recordActivity(`Set rows per page to ${nextPageSize} (cookie saved)`);
+									}}
+									style={{ ...fieldInputStyle, width: 86, padding: "6px 8px" }}
+								>
+									{[4, 6, 10].map((size) => (
+										<option key={size} value={size}>
+											{size}
+										</option>
+									))}
+								</select>
+							</label>
+
+							<label
 								htmlFor="collection-fav-filter"
 								style={{
 									display: "inline-flex",
@@ -420,97 +495,156 @@ export default function CollectionPage() {
 					<div
 						style={{
 							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-							gap: 14,
+							gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+							gap: 16,
 						}}
 					>
-						{currentPageCards.map((card) => (
-							<Link
-								key={card.id}
-								href={`/card/${card.id}`}
-								className="kc-glass-card"
+						<div
+							className="kc-glass-card"
+							style={{
+								borderColor: "var(--kc-border)",
+								padding: "10px 12px",
+							}}
+						>
+							<Table
+								aria-label="Collection cards"
 								style={{
-									textDecoration: "none",
-									borderColor: "var(--kc-border)",
-									display: "block",
-									transition: "transform .2s, border-color .2s",
+									borderCollapse: "collapse",
+									color: "var(--kc-text)",
+									fontSize: 13,
+									lineHeight: 1.4,
 								}}
 							>
-								<div
-									style={{
-										display: "inline-flex",
-										alignItems: "center",
-										border: `1px solid ${rarityColors[card.rarity]}`,
-										color: rarityColors[card.rarity],
-										borderRadius: 999,
-										padding: "3px 10px",
-										fontFamily: "var(--kc-font-h)",
-										fontSize: 10,
-										letterSpacing: 1,
-										marginBottom: 10,
-										textTransform: "uppercase",
-									}}
-								>
-									{card.rarity}
-								</div>
-
-								<h2
-									style={{
-										margin: "0 0 6px",
-										fontFamily: "var(--kc-font-h)",
-										color: "var(--kc-text)",
-										fontSize: 17,
-										letterSpacing: 0.4,
-									}}
-								>
-									{card.player}
-								</h2>
-								<p
-									style={{
-										margin: "0 0 6px",
-										color: "var(--kc-muted)",
-										fontSize: 13,
-									}}
-								>
-									{card.team} · {card.position} · {card.year}
-								</p>
-								<p
-									style={{ margin: "0 0 6px", color: "#9bb8ab", fontSize: 12 }}
-								>
-									{card.series} {card.number ? `· ${card.number}` : ""}
-								</p>
-								<div
-									style={{
-										display: "flex",
-										justifyContent: "space-between",
-										gap: 10,
-										marginTop: 10,
-									}}
-								>
-									<span
-										style={{
-											color: "var(--kc-em)",
-											fontFamily: "var(--kc-font-h)",
-											fontSize: 13,
-										}}
-									>
-										{card.value}
-									</span>
-									<span style={{ color: "var(--kc-muted)", fontSize: 12 }}>
-										Dupes: {card.dupes}
-									</span>
-								</div>
-							</Link>
-						))}
+							<TableHeader>
+								<TableRow style={{ borderBottom: "1px solid var(--kc-border)" }}>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Player
+									</TableHead>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Team
+									</TableHead>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Position
+									</TableHead>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Year
+									</TableHead>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Value
+									</TableHead>
+									<TableHead scope="col" style={tableHeaderCellStyle}>
+										Dupes
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{currentPageCards.length > 0 ? (
+									currentPageCards.map((card) => (
+										<TableRow key={card.id} style={{ borderBottom: "1px solid var(--kc-border)" }}>
+											<TableCell style={tableCellStyle}>
+												<Link
+													href={`/card/${card.id}`}
+													style={{
+														color: "var(--kc-text)",
+														textDecoration: "none",
+														fontFamily: "var(--kc-font-h)",
+														letterSpacing: 0.3,
+													}}
+												>
+													{card.player}
+												</Link>
+											</TableCell>
+											<TableCell style={tableCellStyle}>{card.team}</TableCell>
+											<TableCell style={tableCellStyle}>{card.position}</TableCell>
+											<TableCell style={tableCellStyle}>{card.year}</TableCell>
+											<TableCell style={{ ...tableCellStyle, color: "var(--kc-em)" }}>
+												{card.value}
+											</TableCell>
+											<TableCell style={tableCellStyle}>{card.dupes}</TableCell>
+										</TableRow>
+									))
+								) : (
+									<TableRow>
+										<TableCell colSpan={6} style={{ ...tableCellStyle, textAlign: "center", color: "var(--kc-muted)" }}>
+											{cards.length > 0
+												? "No cards match your current filters."
+												: "No cards in your collection yet."}
+										</TableCell>
+									</TableRow>
+								)}
+							</TableBody>
+							</Table>
+						</div>
+						<div
+							className="kc-glass-card"
+							style={{
+								borderColor: "var(--kc-border)",
+								padding: "14px 14px 6px",
+								minHeight: 330,
+							}}
+						>
+							<h2
+								style={{
+									fontFamily: "var(--kc-font-h)",
+									color: "var(--kc-text)",
+									fontSize: 14,
+									letterSpacing: 1,
+									marginBottom: 10,
+								}}
+							>
+								Rarity distribution (synchronized)
+							</h2>
+							<div style={{ width: "100%", height: 250 }}>
+								<ResponsiveContainer>
+									<BarChart data={chartData}>
+										<CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.25)" />
+										<XAxis dataKey="rarity" stroke="#7a9b8a" tick={{ fontSize: 12 }} />
+										<YAxis allowDecimals={false} stroke="#7a9b8a" tick={{ fontSize: 12 }} />
+										<Tooltip
+											contentStyle={{
+												background: "#101828",
+												border: "1px solid var(--kc-border)",
+												borderRadius: 10,
+												color: "var(--kc-text)",
+											}}
+										/>
+										<Bar dataKey="total" fill="#00ff88" radius={[8, 8, 0, 0]} />
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
 					</div>
 
-					{cards.length > 0 && filteredCards.length === 0 && (
-						<div className="kc-glass-card" style={{ marginTop: 16 }}>
-							<p style={{ margin: 0, color: "var(--kc-text)", fontSize: 14 }}>
-								No cards match your current filters.
+					<div
+						className="kc-glass-card"
+						style={{ marginTop: 16, borderColor: "var(--kc-border)" }}
+					>
+						<h2
+							style={{
+								fontFamily: "var(--kc-font-h)",
+								color: "var(--kc-text)",
+								fontSize: 14,
+								letterSpacing: 1,
+								marginBottom: 10,
+							}}
+						>
+							Recent activity
+						</h2>
+						{activity.length === 0 ? (
+							<p style={{ margin: 0, color: "var(--kc-muted)", fontSize: 13 }}>
+								No tracked actions yet. Try searching, filtering, or creating a card.
 							</p>
-						</div>
-					)}
+						) : (
+							<ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
+								{activity.map((entry) => (
+									<li key={entry.id} style={{ color: "var(--kc-muted)", fontSize: 13 }}>
+										<span style={{ color: "var(--kc-text)" }}>{entry.message}</span>{" "}
+										· {new Date(entry.timestamp).toLocaleTimeString()}
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
 
 					{filteredCards.length > 0 && (
 						<div
