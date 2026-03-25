@@ -6,6 +6,7 @@ import {
 	type ChangeEvent,
 	type FormEvent,
 	type ReactNode,
+	useEffect,
 	useState,
 } from "react";
 
@@ -21,6 +22,9 @@ import {
 const positions: Position[] = ["GK", "DEF", "MID", "FWD"];
 const rarities: Rarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
 const conditions: Condition[] = ["Mint", "Near Mint", "Good", "Fair", "Poor"];
+const positionFilters: Array<Position | "All"> = ["All", ...positions];
+const rarityFilters: Array<Rarity | "All"> = ["All", ...rarities];
+const pageSize = 6;
 
 const fieldInputStyle: CSSProperties = {
 	width: "100%",
@@ -100,6 +104,80 @@ export default function CollectionPage() {
 	);
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const [currentPage, setCurrentPage] = useState(1);
+	const [rarityFilter, setRarityFilter] = useState<Rarity | "All">("All");
+	const [posFilter, setPosFilter] = useState<Position | "All">("All");
+	const [showFav, setShowFav] = useState(false);
+	const [search, setSearch] = useState("");
+
+	const normalizedSearch = search.trim().toLowerCase();
+	const filteredCards = cards.filter((card) => {
+		if (rarityFilter !== "All" && card.rarity !== rarityFilter) {
+			return false;
+		}
+
+		if (posFilter !== "All" && card.position !== posFilter) {
+			return false;
+		}
+
+		if (showFav && !card.fav) {
+			return false;
+		}
+
+		if (normalizedSearch.length === 0) {
+			return true;
+		}
+
+		return [card.player, card.team, card.series, card.number]
+			.join(" ")
+			.toLowerCase()
+			.includes(normalizedSearch);
+	});
+
+	const totalPages = Math.max(1, Math.ceil(filteredCards.length / pageSize));
+	const currentPageStart = (currentPage - 1) * pageSize;
+	const currentPageCards = filteredCards.slice(
+		currentPageStart,
+		currentPageStart + pageSize,
+	);
+
+	useEffect(() => {
+		setCurrentPage((previousPage) => {
+			if (previousPage < 1) {
+				return 1;
+			}
+
+			if (previousPage > totalPages) {
+				return totalPages;
+			}
+
+			return previousPage;
+		});
+	}, [totalPages]);
+
+	const goToPage = (nextPage: number) => {
+		setCurrentPage(Math.min(Math.max(nextPage, 1), totalPages));
+	};
+
+	const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+		setSearch(event.target.value);
+		setCurrentPage(1);
+	};
+
+	const handleRarityFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+		setRarityFilter(event.target.value as Rarity | "All");
+		setCurrentPage(1);
+	};
+
+	const handlePositionFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+		setPosFilter(event.target.value as Position | "All");
+		setCurrentPage(1);
+	};
+
+	const handleShowFavChange = (event: ChangeEvent<HTMLInputElement>) => {
+		setShowFav(event.target.checked);
+		setCurrentPage(1);
+	};
 
 	const openCreateModal = () => {
 		setSubmitError(null);
@@ -247,13 +325,106 @@ export default function CollectionPage() {
 					)}
 
 					<div
+						className="kc-glass-card"
+						style={{
+							borderColor: "var(--kc-border)",
+							marginBottom: 16,
+							padding: "12px 14px",
+							display: "grid",
+							gap: 10,
+						}}
+					>
+						<div
+							style={{
+								display: "grid",
+								gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+								gap: 10,
+								alignItems: "end",
+							}}
+						>
+							<Field label="Search" htmlFor="collection-search">
+								<input
+									id="collection-search"
+									value={search}
+									onChange={handleSearchChange}
+									style={fieldInputStyle}
+									placeholder="Player, team, series, number"
+								/>
+							</Field>
+
+							<Field label="Rarity" htmlFor="collection-rarity-filter">
+								<select
+									id="collection-rarity-filter"
+									value={rarityFilter}
+									onChange={handleRarityFilterChange}
+									style={fieldInputStyle}
+								>
+									{rarityFilters.map((rarity) => (
+										<option key={rarity} value={rarity}>
+											{rarity}
+										</option>
+									))}
+								</select>
+							</Field>
+
+							<Field label="Position" htmlFor="collection-position-filter">
+								<select
+									id="collection-position-filter"
+									value={posFilter}
+									onChange={handlePositionFilterChange}
+									style={fieldInputStyle}
+								>
+									{positionFilters.map((position) => (
+										<option key={position} value={position}>
+											{position}
+										</option>
+									))}
+								</select>
+							</Field>
+						</div>
+
+						<div
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								gap: 12,
+								flexWrap: "wrap",
+							}}
+						>
+							<label
+								htmlFor="collection-fav-filter"
+								style={{
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 8,
+									color: "var(--kc-text)",
+									fontSize: 13,
+								}}
+							>
+								<input
+									id="collection-fav-filter"
+									type="checkbox"
+									checked={showFav}
+									onChange={handleShowFavChange}
+								/>
+								Show favourites only
+							</label>
+
+							<p style={{ margin: 0, color: "var(--kc-muted)", fontSize: 12 }}>
+								Showing {filteredCards.length} of {cards.length} cards
+							</p>
+						</div>
+					</div>
+
+					<div
 						style={{
 							display: "grid",
 							gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
 							gap: 14,
 						}}
 					>
-						{cards.map((card) => (
+						{currentPageCards.map((card) => (
 							<Link
 								key={card.id}
 								href={`/card/${card.id}`}
@@ -332,6 +503,79 @@ export default function CollectionPage() {
 							</Link>
 						))}
 					</div>
+
+					{cards.length > 0 && filteredCards.length === 0 && (
+						<div className="kc-glass-card" style={{ marginTop: 16 }}>
+							<p style={{ margin: 0, color: "var(--kc-text)", fontSize: 14 }}>
+								No cards match your current filters.
+							</p>
+						</div>
+					)}
+
+					{filteredCards.length > 0 && (
+						<div
+							className="kc-glass-card"
+							style={{
+								marginTop: 16,
+								padding: "14px 16px",
+								borderColor: "var(--kc-border)",
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								gap: 12,
+								flexWrap: "wrap",
+							}}
+						>
+							<p style={{ margin: 0, color: "var(--kc-muted)", fontSize: 12 }}>
+								Page {currentPage} of {totalPages} · {filteredCards.length} result
+								{filteredCards.length === 1 ? "" : "s"}
+							</p>
+							<div
+								style={{
+									display: "flex",
+									gap: 8,
+									alignItems: "center",
+									flexWrap: "wrap",
+								}}
+							>
+								<button
+									type="button"
+									className="kc-btn kc-btn-ghost kc-btn-sm"
+									onClick={() => goToPage(currentPage - 1)}
+									disabled={currentPage <= 1}
+									style={currentPage <= 1 ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+								>
+									Prev
+								</button>
+
+								{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => {
+									const isCurrent = pageNumber === currentPage;
+
+									return (
+										<button
+											key={pageNumber}
+											type="button"
+											className={isCurrent ? "kc-btn kc-btn-em kc-btn-sm" : "kc-btn kc-btn-ghost kc-btn-sm"}
+											onClick={() => goToPage(pageNumber)}
+											aria-current={isCurrent ? "page" : undefined}
+										>
+											{pageNumber}
+										</button>
+									);
+								})}
+
+								<button
+									type="button"
+									className="kc-btn kc-btn-ghost kc-btn-sm"
+									onClick={() => goToPage(currentPage + 1)}
+									disabled={currentPage >= totalPages}
+									style={currentPage >= totalPages ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+								>
+									Next
+								</button>
+							</div>
+						</div>
+					)}
 
 					{loading && (
 						<div className="kc-glass-card" style={{ marginTop: 16 }}>
