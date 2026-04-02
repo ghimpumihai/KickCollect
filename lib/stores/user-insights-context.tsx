@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type ActivityEntry = {
   id: number;
@@ -21,6 +22,7 @@ type UserInsightsContextValue = {
 
 const PAGE_SIZE_COOKIE_NAME = "kc_page_size";
 const ACTIVITY_COOKIE_NAME = "kc_activity_log";
+const LAST_PAGE_COOKIE_NAME = "kc_last_page";
 const cookieMaxAge = 60 * 60 * 24 * 365;
 
 const UserInsightsContext = createContext<UserInsightsContextValue | null>(null);
@@ -36,21 +38,13 @@ function readCookie(name: string): string | null {
   return matchingPart ? decodeURIComponent(matchingPart.slice(cookieNamePrefix.length)) : null;
 }
 
-function writeCookie(name: string, value: string): void {
+function writeCookie(name: string, value: string, encodeValue = true): void {
   if (typeof document === "undefined") {
     return;
   }
 
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${cookieMaxAge}; samesite=lax`;
-}
-
-function getInitialPageSize(): number {
-  const fromCookie = Number(readCookie(PAGE_SIZE_COOKIE_NAME));
-  if ([4, 6, 10].includes(fromCookie)) {
-    return fromCookie;
-  }
-
-  return 6;
+  const cookieValue = encodeValue ? encodeURIComponent(value) : value;
+  document.cookie = `${name}=${cookieValue}; path=/; max-age=${cookieMaxAge}; samesite=lax`;
 }
 
 function readInitialActivity(): ActivityEntry[] {
@@ -83,10 +77,31 @@ type UserInsightsProviderProps = {
 };
 
 export function UserInsightsProvider({ children }: UserInsightsProviderProps) {
-  const [preferences, setPreferences] = useState<UserPreferences>(() => ({
-    pageSize: getInitialPageSize(),
-  }));
-  const [activity, setActivity] = useState<ActivityEntry[]>(() => readInitialActivity());
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [preferences, setPreferences] = useState<UserPreferences>({ pageSize: 6 });
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+
+  useEffect(() => {
+    const fromPageSize = Number(readCookie(PAGE_SIZE_COOKIE_NAME));
+    if ([4, 6, 10].includes(fromPageSize)) {
+      setPreferences((current) => (current.pageSize === fromPageSize ? current : { ...current, pageSize: fromPageSize }));
+    }
+
+    setActivity(readInitialActivity());
+  }, []);
+
+  useEffect(() => {
+    // Track last route visited so the app can restore context after refresh/redirect.
+    const query = searchParams?.toString();
+    const fullPath = query ? `${pathname}?${query}` : pathname;
+    if (typeof pathname === "string" && pathname.length > 0) {
+      writeCookie(LAST_PAGE_COOKIE_NAME, fullPath || "/", false);
+    } else {
+      writeCookie(LAST_PAGE_COOKIE_NAME, "/", false);
+    }
+  }, [pathname, searchParams]);
 
   const setPageSizePreference = (pageSize: number) => {
     if (![4, 6, 10].includes(pageSize)) {

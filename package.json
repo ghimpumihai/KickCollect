@@ -7,8 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "policy:storage": "node .sisyphus/tmp/task2-storage-policy-guardrail.js",
     "test": "vitest",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list",
+    "test:e2e:smoke": "playwright test tests/e2e/smoke-routes.spec.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -57,6 +61,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@playwright/test": "^1.55.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^20",

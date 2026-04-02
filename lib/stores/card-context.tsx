@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { CardService } from "@/lib/services/card-service";
 import type { CardEntry } from "@/types/card";
@@ -25,11 +25,55 @@ type CardProviderProps = {
   children: ReactNode;
 };
 
+const CARDS_SESSION_STORAGE_KEY = "kc_cards_session";
+
 export function CardProvider({ children }: CardProviderProps) {
   const serviceRef = useRef(new CardService());
   const [cards, setCards] = useState<CardEntry[]>(() => serviceRef.current.getAll());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const didRehydrateRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CARDS_SESSION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          const loadedCards = parsed.filter(
+            (c) =>
+              typeof (c as any)?.id === "number" &&
+              typeof (c as any)?.player === "string" &&
+              typeof (c as any)?.series === "string" &&
+              typeof (c as any)?.team === "string" &&
+              typeof (c as any)?.position === "string" &&
+              typeof (c as any)?.year === "number" &&
+              typeof (c as any)?.rarity === "string" &&
+              typeof (c as any)?.condition === "string" &&
+              typeof (c as any)?.value === "string" &&
+              typeof (c as any)?.dupes === "number" &&
+              typeof (c as any)?.fav === "boolean",
+          ) as CardEntry[];
+
+          serviceRef.current = new CardService(loadedCards);
+          setCards(serviceRef.current.getAll());
+        }
+      }
+    } catch {
+      // Ignore storage parse errors; fall back to seeded in-memory cards.
+    } finally {
+      didRehydrateRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!didRehydrateRef.current) return;
+    try {
+      sessionStorage.setItem(CARDS_SESSION_STORAGE_KEY, JSON.stringify(cards));
+    } catch {
+    }
+  }, [cards]);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -45,40 +89,31 @@ export function CardProvider({ children }: CardProviderProps) {
   }, []);
 
   const createCard = useCallback((data: unknown): CardEntry => {
-    setError(null);
-
     try {
       const created = serviceRef.current.create(data);
       setCards(serviceRef.current.getAll());
       return created;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Failed to create card.");
       throw caughtError;
     }
   }, []);
 
   const updateCard = useCallback((id: number, data: unknown): CardEntry | undefined => {
-    setError(null);
-
     try {
       const updated = serviceRef.current.update(id, data);
       setCards(serviceRef.current.getAll());
       return updated;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Failed to update card.");
       throw caughtError;
     }
   }, []);
 
   const deleteCard = useCallback((id: number): boolean => {
-    setError(null);
-
     try {
       const deleted = serviceRef.current.delete(id);
       setCards(serviceRef.current.getAll());
       return deleted;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Failed to delete card.");
       throw caughtError;
     }
   }, []);

@@ -89,6 +89,18 @@ const createInitialFormState = (): CreateCardForm => ({
 	fav: false,
 });
 
+const usdFormatter = new Intl.NumberFormat("en-US", {
+	style: "currency",
+	currency: "USD",
+});
+
+function parseCardValue(value: string): number {
+	const normalized = value.replace(/[^0-9.-]+/g, "");
+	const parsed = Number.parseFloat(normalized);
+
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function getErrorMessage(caughtError: unknown): string {
 	if (
 		typeof caughtError === "object" &&
@@ -172,6 +184,16 @@ export default function CollectionPage() {
 			rarities.map((rarity) => ({
 				rarity,
 				total: filteredCards.filter((card) => card.rarity === rarity).length,
+			})),
+		[filteredCards],
+	);
+	const valueByRarityData = useMemo(
+		() =>
+			rarities.map((rarity) => ({
+				rarity,
+				totalValue: filteredCards
+					.filter((card) => card.rarity === rarity)
+					.reduce((sum, card) => sum + parseCardValue(card.value), 0),
 			})),
 		[filteredCards],
 	);
@@ -290,7 +312,6 @@ export default function CollectionPage() {
 					flex: 1,
 					padding: "28px 24px 32px",
 					position: "relative",
-					overflowY: "auto",
 				}}
 			>
 				<div
@@ -609,6 +630,49 @@ export default function CollectionPage() {
 											}}
 										/>
 										<Bar dataKey="total" fill="#00ff88" radius={[8, 8, 0, 0]} />
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
+						<div
+							className="kc-glass-card"
+							style={{
+								borderColor: "var(--kc-border)",
+								padding: "14px 14px 6px",
+								minHeight: 330,
+							}}
+						>
+							<h2
+								style={{
+									fontFamily: "var(--kc-font-h)",
+									color: "var(--kc-text)",
+									fontSize: 14,
+									letterSpacing: 1,
+									marginBottom: 10,
+								}}
+							>
+								Collection value by rarity
+							</h2>
+							<div style={{ width: "100%", height: 250 }}>
+								<ResponsiveContainer>
+									<BarChart data={valueByRarityData}>
+										<CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.25)" />
+										<XAxis dataKey="rarity" stroke="#7a9b8a" tick={{ fontSize: 12 }} />
+										<YAxis
+											stroke="#7a9b8a"
+											tick={{ fontSize: 12 }}
+											tickFormatter={(amount) => usdFormatter.format(Number(amount))}
+										/>
+										<Tooltip
+											contentStyle={{
+												background: "#101828",
+												border: "1px solid var(--kc-border)",
+												borderRadius: 10,
+												color: "var(--kc-text)",
+											}}
+											formatter={(amount) => usdFormatter.format(Number(amount))}
+										/>
+										<Bar dataKey="totalValue" fill="#60a5fa" radius={[8, 8, 0, 0]} />
 									</BarChart>
 								</ResponsiveContainer>
 							</div>

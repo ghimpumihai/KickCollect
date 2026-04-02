@@ -41,4 +41,5 @@ next-env.d.ts
 .sisyphus
 CLAUDE.md
 AGENTS.md
+.tmp-research
 
