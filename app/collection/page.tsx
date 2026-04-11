@@ -197,6 +197,17 @@ export default function CollectionPage() {
 			})),
 		[filteredCards],
 	);
+	const totalFilteredValue = useMemo(
+		() => filteredCards.reduce((sum, card) => sum + parseCardValue(card.value), 0),
+		[filteredCards],
+	);
+	const valueChartRenderKey = useMemo(
+		() =>
+			valueByRarityData
+				.map((entry) => `${entry.rarity}:${entry.totalValue.toFixed(2)}`)
+				.join("|"),
+		[valueByRarityData],
+	);
 
 	useEffect(() => {
 		setCurrentPage((previousPage) => {
@@ -653,9 +664,19 @@ export default function CollectionPage() {
 							>
 								Collection value by rarity
 							</h2>
+							<p
+								data-testid="collection-value-total"
+								style={{
+									margin: "0 0 10px",
+									color: "var(--kc-muted)",
+									fontSize: 12,
+								}}
+							>
+								Filtered total value: {usdFormatter.format(totalFilteredValue)}
+							</p>
 							<div style={{ width: "100%", height: 250 }}>
 								<ResponsiveContainer>
-									<BarChart data={valueByRarityData}>
+									<BarChart key={valueChartRenderKey} data={valueByRarityData}>
 										<CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.25)" />
 										<XAxis dataKey="rarity" stroke="#7a9b8a" tick={{ fontSize: 12 }} />
 										<YAxis

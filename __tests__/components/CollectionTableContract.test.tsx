@@ -159,4 +159,20 @@ describe("Collection semantic table contract", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Prev" })).toBeEnabled();
   });
+
+  it("updates the value statistic when filters change", () => {
+    render(<CollectionPage />);
+
+    expect(screen.getByTestId("collection-value-total")).toHaveTextContent(
+      "Filtered total value: $722.00",
+    );
+
+    fireEvent.change(screen.getByLabelText("Rarity"), {
+      target: { value: "Rare" },
+    });
+
+    expect(screen.getByTestId("collection-value-total")).toHaveTextContent(
+      "Filtered total value: $205.00",
+    );
+  });
 });
