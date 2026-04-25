@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import CardDetailPage from "@/app/card/[id]/page";
@@ -66,8 +66,8 @@ describe("UpdateCardForm flow", () => {
     };
   });
 
-  it("prefills modal, submits edits, and closes on success", () => {
-    mocks.updateCard.mockReturnValue({ ...mocks.card, player: "Updated Name", value: "$99.00" });
+  it("prefills modal, submits edits, and closes on success", async () => {
+    mocks.updateCard.mockResolvedValue({ ...mocks.card, player: "Updated Name", value: "$99.00" });
 
     render(<CardDetailPage />);
 
@@ -80,19 +80,21 @@ describe("UpdateCardForm flow", () => {
     fireEvent.change(screen.getByLabelText("Value"), { target: { value: "99" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    expect(mocks.updateCard).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mocks.updateCard).toHaveBeenCalledTimes(1);
+    });
     expect(mocks.updateCard).toHaveBeenCalledWith(
       101,
       expect.objectContaining({ player: "Updated Name", value: "99" }),
     );
-    expect(screen.queryByRole("heading", { name: "Edit Card" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Edit Card" })).not.toBeInTheDocument();
+    });
   });
 
-  it("keeps modal open and shows error when update fails", () => {
-    mocks.updateCard.mockImplementation(() => {
-      throw {
+  it("keeps modal open and shows error when update fails", async () => {
+    mocks.updateCard.mockRejectedValue({
         issues: [{ message: "Player name must be at least 2 characters." }],
-      };
     });
 
     render(<CardDetailPage />);
@@ -101,7 +103,9 @@ describe("UpdateCardForm flow", () => {
     fireEvent.change(screen.getByLabelText("Player"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    expect(mocks.updateCard).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mocks.updateCard).toHaveBeenCalledTimes(1);
+    });
     expect(screen.getByText("Player name must be at least 2 characters.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Edit Card" })).toBeInTheDocument();
   });

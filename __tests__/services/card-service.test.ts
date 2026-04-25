@@ -5,7 +5,8 @@ import { createMockCard } from "@/__tests__/factories";
 import { CardService } from "@/lib/services/card-service";
 
 function createValidCardInput(overrides: Record<string, unknown> = {}) {
-  const { id: _id, ...baseCard } = createMockCard();
+  const { id, ...baseCard } = createMockCard();
+  void id;
 
   return {
     ...baseCard,
@@ -21,6 +22,33 @@ describe("CardService", () => {
     cards[0].player = "Mutated Player";
 
     expect(service.getById(10)?.player).toBe("Original Player");
+  });
+
+  it("getPaginated returns metadata with sliced items", () => {
+    const service = new CardService([
+      createMockCard({ id: 1, player: "One" }),
+      createMockCard({ id: 2, player: "Two" }),
+      createMockCard({ id: 3, player: "Three" }),
+      createMockCard({ id: 4, player: "Four" }),
+    ]);
+
+    const page = service.getPaginated(2, 2);
+
+    expect(page.page).toBe(2);
+    expect(page.pageSize).toBe(2);
+    expect(page.totalItems).toBe(4);
+    expect(page.totalPages).toBe(2);
+    expect(page.items.map((card) => card.id)).toEqual([3, 4]);
+  });
+
+  it("getPaginated returns an empty items array for pages beyond the dataset", () => {
+    const service = new CardService([createMockCard({ id: 1 }), createMockCard({ id: 2 })]);
+
+    const page = service.getPaginated(5, 2);
+
+    expect(page.items).toEqual([]);
+    expect(page.totalItems).toBe(2);
+    expect(page.totalPages).toBe(1);
   });
 
   it("getById returns a copy and undefined for unknown ids", () => {

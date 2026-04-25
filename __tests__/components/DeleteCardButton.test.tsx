@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import CardDetailPage from "@/app/card/[id]/page";
@@ -66,8 +66,8 @@ describe("DeleteCardButton flow", () => {
     };
   });
 
-  it("opens confirmation and navigates to collection on successful delete", () => {
-    mocks.deleteCard.mockReturnValue(true);
+  it("opens confirmation and navigates to collection on successful delete", async () => {
+    mocks.deleteCard.mockResolvedValue(true);
 
     render(<CardDetailPage />);
 
@@ -76,21 +76,29 @@ describe("DeleteCardButton flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
-    expect(mocks.deleteCard).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mocks.deleteCard).toHaveBeenCalledTimes(1);
+    });
     expect(mocks.deleteCard).toHaveBeenCalledWith(55);
-    expect(mocks.push).toHaveBeenCalledWith("/collection");
-    expect(screen.queryByRole("heading", { name: /delete card/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/collection");
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: /delete card/i })).not.toBeInTheDocument();
+    });
   });
 
-  it("shows inline error and stays on page when delete returns false", () => {
-    mocks.deleteCard.mockReturnValue(false);
+  it("shows inline error and stays on page when delete returns false", async () => {
+    mocks.deleteCard.mockResolvedValue(false);
 
     render(<CardDetailPage />);
 
     fireEvent.click(screen.getByRole("button", { name: /delete/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
-    expect(mocks.deleteCard).toHaveBeenCalledWith(55);
+    await waitFor(() => {
+      expect(mocks.deleteCard).toHaveBeenCalledWith(55);
+    });
     expect(mocks.push).not.toHaveBeenCalled();
     expect(
       screen.getByText("Card could not be deleted because it no longer exists."),

@@ -1,6 +1,14 @@
 import { createCardSchema, updateCardSchema } from "@/lib/validation/card-schema";
 import type { CardEntry } from "@/types/card";
 
+export type CardPaginationResult = {
+  items: CardEntry[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
 const seededCards: CardEntry[] = [
   {
     id: 1,
@@ -97,6 +105,22 @@ export class CardService {
 
   getAll(): CardEntry[] {
     return this.cards.map((card) => ({ ...card }));
+  }
+
+  getPaginated(page: number, pageSize: number): CardPaginationResult {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const items = this.cards.slice(startIndex, endIndex).map((card) => ({ ...card }));
+    const totalItems = this.cards.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+    return {
+      items,
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
+    };
   }
 
   getById(id: number): CardEntry | undefined {

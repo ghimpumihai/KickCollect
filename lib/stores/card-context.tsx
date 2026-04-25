@@ -1,21 +1,20 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { CardService } from "@/lib/services/card-service";
 import type { CardEntry } from "@/types/card";
 
 type CardReadContextValue = {
   cards: CardEntry[];
   loading: boolean;
   error: string | null;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 };
 
 type CardActionsContextValue = {
-  createCard: (data: unknown) => CardEntry;
-  updateCard: (id: number, data: unknown) => CardEntry | undefined;
-  deleteCard: (id: number) => boolean;
+  createCard: (data: unknown) => Promise<CardEntry>;
+  updateCard: (id: number, data: unknown) => Promise<CardEntry | undefined>;
+  deleteCard: (id: number) => Promise<boolean>;
 };
 
 const CardReadContext = createContext<CardReadContextValue | null>(null);
@@ -25,97 +24,165 @@ type CardProviderProps = {
   children: ReactNode;
 };
 
-const CARDS_SESSION_STORAGE_KEY = "kc_cards_session";
+const CARDS_API_PATH = "/api/cards";
+const CARDS_PAGE_SIZE = 100;
+
+type ApiErrorPayload = {
+  error?: string;
+  issues?: string[];
+};
+
+type ErrorWithIssues = Error & {
+  issues?: Array<{ message: string }>;
+};
+
+type CardPaginationResponse = {
+  items: CardEntry[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+async function createApiError(response: Response, fallbackMessage: string): Promise<ErrorWithIssues> {
+  let payload: ApiErrorPayload | null = null;
+
+  try {
+    payload = (await response.json()) as ApiErrorPayload;
+  } catch {
+    payload = null;
+  }
+
+  const message = typeof payload?.error === "string" && payload.error.length > 0 ? payload.error : fallbackMessage;
+  const error = new Error(message) as ErrorWithIssues;
+
+  if (Array.isArray(payload?.issues)) {
+    const issues = payload.issues
+      .filter((issue): issue is string => typeof issue === "string" && issue.length > 0)
+      .map((issueMessage) => ({ message: issueMessage }));
+
+    if (issues.length > 0) {
+      error.issues = issues;
+    }
+  }
+
+  return error;
+}
+
+async function requestJson<T>(input: RequestInfo | URL, init: RequestInit, fallbackMessage: string): Promise<T> {
+  const response = await fetch(input, init);
+
+  if (!response.ok) {
+    throw await createApiError(response, fallbackMessage);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchAllCards(): Promise<CardEntry[]> {
+  const cards: CardEntry[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const pageResponse = await requestJson<CardPaginationResponse>(
+      `${CARDS_API_PATH}?page=${page}&pageSize=${CARDS_PAGE_SIZE}`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      "Unable to load cards.",
+    );
+
+    cards.push(...pageResponse.items);
+    totalPages = pageResponse.totalPages;
+    page += 1;
+  }
+
+  return cards;
+}
 
 export function CardProvider({ children }: CardProviderProps) {
-  const serviceRef = useRef(new CardService());
-  const [cards, setCards] = useState<CardEntry[]>(() => serviceRef.current.getAll());
+  const [cards, setCards] = useState<CardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const didRehydrateRef = useRef(false);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(CARDS_SESSION_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          const loadedCards = parsed.filter(
-            (c) =>
-              typeof (c as any)?.id === "number" &&
-              typeof (c as any)?.player === "string" &&
-              typeof (c as any)?.series === "string" &&
-              typeof (c as any)?.team === "string" &&
-              typeof (c as any)?.position === "string" &&
-              typeof (c as any)?.year === "number" &&
-              typeof (c as any)?.rarity === "string" &&
-              typeof (c as any)?.condition === "string" &&
-              typeof (c as any)?.value === "string" &&
-              typeof (c as any)?.dupes === "number" &&
-              typeof (c as any)?.fav === "boolean",
-          ) as CardEntry[];
-
-          serviceRef.current = new CardService(loadedCards);
-          setCards(serviceRef.current.getAll());
-        }
-      }
-    } catch {
-      // Ignore storage parse errors; fall back to seeded in-memory cards.
-    } finally {
-      didRehydrateRef.current = true;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!didRehydrateRef.current) return;
-    try {
-      sessionStorage.setItem(CARDS_SESSION_STORAGE_KEY, JSON.stringify(cards));
-    } catch {
-    }
-  }, [cards]);
-
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      setCards(serviceRef.current.getAll());
+      const nextCards = await fetchAllCards();
+      setCards(nextCards);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Failed to refresh cards.");
+      throw caughtError;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const createCard = useCallback((data: unknown): CardEntry => {
-    try {
-      const created = serviceRef.current.create(data);
-      setCards(serviceRef.current.getAll());
-      return created;
-    } catch (caughtError) {
-      throw caughtError;
-    }
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const createCard = useCallback(async (data: unknown): Promise<CardEntry> => {
+    const created = await requestJson<CardEntry>(
+      CARDS_API_PATH,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(data),
+      },
+      "Unable to create card.",
+    );
+
+    setCards((currentCards) => [...currentCards, created]);
+    return created;
   }, []);
 
-  const updateCard = useCallback((id: number, data: unknown): CardEntry | undefined => {
-    try {
-      const updated = serviceRef.current.update(id, data);
-      setCards(serviceRef.current.getAll());
-      return updated;
-    } catch (caughtError) {
-      throw caughtError;
+  const updateCard = useCallback(async (id: number, data: unknown): Promise<CardEntry | undefined> => {
+    const response = await fetch(`${CARDS_API_PATH}/${id}`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (response.status === 404) {
+      return undefined;
     }
+
+    if (!response.ok) {
+      throw await createApiError(response, "Unable to update card.");
+    }
+
+    const updated = (await response.json()) as CardEntry;
+    setCards((currentCards) =>
+      currentCards.map((currentCard) => (currentCard.id === updated.id ? updated : currentCard)),
+    );
+
+    return updated;
   }, []);
 
-  const deleteCard = useCallback((id: number): boolean => {
-    try {
-      const deleted = serviceRef.current.delete(id);
-      setCards(serviceRef.current.getAll());
-      return deleted;
-    } catch (caughtError) {
-      throw caughtError;
+  const deleteCard = useCallback(async (id: number): Promise<boolean> => {
+    const response = await fetch(`${CARDS_API_PATH}/${id}`, {
+      method: "DELETE",
+    });
+
+    if (response.status === 404) {
+      return false;
     }
+
+    if (!response.ok) {
+      throw await createApiError(response, "Unable to delete card.");
+    }
+
+    setCards((currentCards) => currentCards.filter((currentCard) => currentCard.id !== id));
+    return true;
   }, []);
 
   const readValue = useMemo<CardReadContextValue>(

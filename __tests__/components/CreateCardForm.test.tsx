@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import CollectionPage from "@/app/collection/page";
@@ -32,8 +32,9 @@ describe("CreateCardForm flow", () => {
     mocks.refresh.mockReset();
   });
 
-  it("opens modal and submits create successfully", () => {
-    mocks.createCard.mockReturnValue({ id: 200 });
+  it("opens modal and submits create successfully", async () => {
+    mocks.createCard.mockResolvedValue({ id: 200 });
+    mocks.refresh.mockResolvedValue(undefined);
 
     render(<CollectionPage />);
 
@@ -48,7 +49,9 @@ describe("CreateCardForm flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /create card/i }));
 
-    expect(mocks.createCard).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mocks.createCard).toHaveBeenCalledTimes(1);
+    });
     expect(mocks.createCard).toHaveBeenCalledWith(
       expect.objectContaining({
         player: "Bukayo Saka",
@@ -59,14 +62,14 @@ describe("CreateCardForm flow", () => {
       }),
     );
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("heading", { name: "Add Card" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Add Card" })).not.toBeInTheDocument();
+    });
   });
 
-  it("shows validation-like error when create action throws", () => {
-    mocks.createCard.mockImplementation(() => {
-      throw {
+  it("shows validation-like error when create action throws", async () => {
+    mocks.createCard.mockRejectedValue({
         issues: [{ message: "Player name must be at least 2 characters." }],
-      };
     });
 
     render(<CollectionPage />);
@@ -74,7 +77,9 @@ describe("CreateCardForm flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /add card/i }));
     fireEvent.click(screen.getByRole("button", { name: /create card/i }));
 
-    expect(mocks.createCard).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mocks.createCard).toHaveBeenCalledTimes(1);
+    });
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(screen.getByText("Player name must be at least 2 characters.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Add Card" })).toBeInTheDocument();

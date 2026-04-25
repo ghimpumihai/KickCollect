@@ -20,7 +20,9 @@ export default defineConfig({
       all: true,
       include: [
         "lib/services/**/*.ts",
+        "lib/server/**/*.ts",
         "lib/validation/**/*.ts",
+        "app/api/**/*.ts",
         "app/collection/page.tsx",
         "app/card/*/page.tsx",
       ],

@@ -284,13 +284,13 @@ export default function CollectionPage() {
 		}));
 	};
 
-	const handleCreateSubmit = (event: FormEvent<HTMLFormElement>) => {
+	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		setSubmitting(true);
 		setSubmitError(null);
 
 		try {
-			createCard({
+			await createCard({
 				player: form.player,
 				series: form.series,
 				number: form.number,
@@ -304,7 +304,7 @@ export default function CollectionPage() {
 				fav: form.fav,
 			});
 
-			refresh();
+			await refresh();
 			recordActivity(`Created card: ${form.player}`);
 			closeCreateModal();
 		} catch (caughtError) {

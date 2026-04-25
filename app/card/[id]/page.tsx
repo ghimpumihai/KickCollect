@@ -160,7 +160,7 @@ export default function CardDetailPage() {
     );
   };
 
-  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!card || !editForm) {
@@ -172,7 +172,7 @@ export default function CardDetailPage() {
     setEditSubmitError(null);
 
     try {
-      const updated = updateCard(card.id, {
+      const updated = await updateCard(card.id, {
         player: editForm.player,
         series: editForm.series,
         number: editForm.number,
@@ -218,7 +218,7 @@ export default function CardDetailPage() {
     setConfirmDelete(false);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!card) {
       setDeleteSubmitError("Card details are unavailable. Please close this dialog and try again.");
       return;
@@ -228,7 +228,7 @@ export default function CardDetailPage() {
     setDeleteSubmitError(null);
 
     try {
-      const deleted = deleteCard(card.id);
+      const deleted = await deleteCard(card.id);
 
       if (!deleted) {
         setDeleteSubmitError("Card could not be deleted because it no longer exists.");
