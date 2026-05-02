@@ -15,24 +15,26 @@ function createValidCardInput(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CardService", () => {
-  it("getAll returns defensive copies", () => {
-    const service = new CardService([createMockCard({ id: 10, player: "Original Player" })]);
+  it("getAll returns defensive copies", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 10, player: "Original Player" })]);
 
-    const cards = service.getAll();
+    const cards = await service.getAll();
     cards[0].player = "Mutated Player";
 
-    expect(service.getById(10)?.player).toBe("Original Player");
+    expect((await service.getById(10))?.player).toBe("Original Player");
   });
 
-  it("getPaginated returns metadata with sliced items", () => {
-    const service = new CardService([
+  it("getPaginated returns metadata with sliced items", async () => {
+    const service = new CardService();
+    await service.reset([
       createMockCard({ id: 1, player: "One" }),
       createMockCard({ id: 2, player: "Two" }),
       createMockCard({ id: 3, player: "Three" }),
       createMockCard({ id: 4, player: "Four" }),
     ]);
 
-    const page = service.getPaginated(2, 2);
+    const page = await service.getPaginated(2, 2);
 
     expect(page.page).toBe(2);
     expect(page.pageSize).toBe(2);
@@ -41,20 +43,22 @@ describe("CardService", () => {
     expect(page.items.map((card) => card.id)).toEqual([3, 4]);
   });
 
-  it("getPaginated returns an empty items array for pages beyond the dataset", () => {
-    const service = new CardService([createMockCard({ id: 1 }), createMockCard({ id: 2 })]);
+  it("getPaginated returns an empty items array for pages beyond the dataset", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 1 }), createMockCard({ id: 2 })]);
 
-    const page = service.getPaginated(5, 2);
+    const page = await service.getPaginated(5, 2);
 
     expect(page.items).toEqual([]);
     expect(page.totalItems).toBe(2);
     expect(page.totalPages).toBe(1);
   });
 
-  it("getById returns a copy and undefined for unknown ids", () => {
-    const service = new CardService([createMockCard({ id: 15, team: "Arsenal" })]);
+  it("getById returns a copy and undefined for unknown ids", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 15, team: "Arsenal" })]);
 
-    const card = service.getById(15);
+    const card = await service.getById(15);
     expect(card).toBeDefined();
 
     if (!card) {
@@ -63,28 +67,30 @@ describe("CardService", () => {
 
     card.team = "Chelsea";
 
-    expect(service.getById(15)?.team).toBe("Arsenal");
-    expect(service.getById(9999)).toBeUndefined();
+    expect((await service.getById(15))?.team).toBe("Arsenal");
+    expect(await service.getById(9999)).toBeUndefined();
   });
 
-  it("create generates next id and normalizes numeric value", () => {
-    const service = new CardService([
+  it("create generates next id and normalizes numeric value", async () => {
+    const service = new CardService();
+    await service.reset([
       createMockCard({ id: 4 }),
       createMockCard({ id: 12, player: "Existing Card" }),
     ]);
 
-    const created = service.create(createValidCardInput({ value: 22.5 }));
+    const created = await service.create(createValidCardInput({ value: 22.5 }));
 
     expect(created.id).toBe(13);
     expect(created.value).toBe("$22.50");
-    expect(service.getById(13)).toEqual(created);
+    expect(await service.getById(13)).toEqual(created);
   });
 
-  it("create throws ZodError for invalid payload", () => {
-    const service = new CardService([]);
+  it("create throws ZodError for invalid payload", async () => {
+    const service = new CardService();
+    await service.reset([]);
 
     try {
-      service.create(createValidCardInput({ player: "", year: 1800 }));
+      await service.create(createValidCardInput({ player: "", year: 1800 }));
       throw new Error("Expected create to throw a ZodError.");
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -97,10 +103,11 @@ describe("CardService", () => {
     }
   });
 
-  it("update merges provided fields and keeps route id authoritative", () => {
-    const service = new CardService([createMockCard({ id: 30, player: "Before", value: "$10.00", fav: false })]);
+  it("update merges provided fields and keeps route id authoritative", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 30, player: "Before", value: "$10.00", fav: false })]);
 
-    const updated = service.update(30, {
+    const updated = await service.update(30, {
       id: 999,
       player: "After",
       value: 30,
@@ -115,23 +122,25 @@ describe("CardService", () => {
         fav: true,
       }),
     );
-    expect(service.getById(30)?.id).toBe(30);
+    expect((await service.getById(30))?.id).toBe(30);
   });
 
-  it("update returns undefined for missing cards", () => {
-    const service = new CardService([createMockCard({ id: 7 })]);
+  it("update returns undefined for missing cards", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 7 })]);
 
-    const updated = service.update(8, { player: "Nope" });
+    const updated = await service.update(8, { player: "Nope" });
 
     expect(updated).toBeUndefined();
-    expect(service.getAll()).toHaveLength(1);
+    expect((await service.getAll())).toHaveLength(1);
   });
 
-  it("update throws ZodError for invalid update payload", () => {
-    const service = new CardService([createMockCard({ id: 42, player: "Stable Name" })]);
+  it("update throws ZodError for invalid update payload", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 42, player: "Stable Name" })]);
 
     try {
-      service.update(42, { player: "", dupes: -1 });
+      await service.update(42, { player: "", dupes: -1 });
       throw new Error("Expected update to throw a ZodError.");
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -143,15 +152,16 @@ describe("CardService", () => {
       expect(issueMessages).toContain("Duplicate count cannot be negative.");
     }
 
-    expect(service.getById(42)?.player).toBe("Stable Name");
+    expect((await service.getById(42))?.player).toBe("Stable Name");
   });
 
-  it("delete returns true when card exists and false otherwise", () => {
-    const service = new CardService([createMockCard({ id: 1 }), createMockCard({ id: 2 })]);
+  it("delete returns true when card exists and false otherwise", async () => {
+    const service = new CardService();
+    await service.reset([createMockCard({ id: 1 }), createMockCard({ id: 2 })]);
 
-    expect(service.delete(2)).toBe(true);
-    expect(service.getById(2)).toBeUndefined();
-    expect(service.delete(2)).toBe(false);
-    expect(service.getAll()).toHaveLength(1);
+    expect(await service.delete(2)).toBe(true);
+    expect(await service.getById(2)).toBeUndefined();
+    expect(await service.delete(2)).toBe(false);
+    expect(await service.getAll()).toHaveLength(1);
   });
 });

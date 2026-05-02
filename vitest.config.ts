@@ -13,6 +13,9 @@ export default defineConfig({
     exclude: ["tests/e2e/**", "node_modules/**", "dist/**", ".next/**"],
     setupFiles: ["./__tests__/setup.ts"],
     globals: true,
+    fileParallelism: false,
+    maxWorkers: 1,
+    minWorkers: 1,
     passWithNoTests: true,
     coverage: {
       provider: "v8",

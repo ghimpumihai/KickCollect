@@ -7,6 +7,7 @@ export function getCardStore(): CardService {
   return cardStore;
 }
 
-export function resetCardStoreForTests(initialCards?: CardEntry[]): void {
-  cardStore = new CardService(initialCards);
+export async function resetCardStoreForTests(initialCards?: CardEntry[]): Promise<void> {
+  cardStore = new CardService();
+  await cardStore.reset(initialCards);
 }

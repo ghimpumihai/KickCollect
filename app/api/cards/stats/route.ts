@@ -2,7 +2,7 @@ import { ZodError } from "zod";
 
 import { emptyResponse, jsonResponse } from "@/lib/server/api-response";
 import { getCardStore } from "@/lib/server/card-store";
-import { cardListQuerySchema } from "@/lib/validation/card-api-schema";
+import { cardStatsQuerySchema } from "@/lib/validation/card-api-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +10,6 @@ type ApiErrorPayload = {
   error: string;
   issues?: string[];
 };
-
-function badRequest(message: string): Response {
-  const payload: ApiErrorPayload = { error: message };
-  return jsonResponse(payload, 400);
-}
 
 function validationError(error: ZodError): Response {
   return jsonResponse(
@@ -29,9 +24,7 @@ function validationError(error: ZodError): Response {
 export async function GET(request: Request): Promise<Response> {
   try {
     const searchParams = new URL(request.url).searchParams;
-    const { page, pageSize, search, team, rarity, position, fav } = cardListQuerySchema.parse({
-      page: searchParams.get("page") ?? undefined,
-      pageSize: searchParams.get("pageSize") ?? undefined,
+    const { search, team, rarity, position, fav } = cardStatsQuerySchema.parse({
       search: searchParams.get("search")?.trim() || undefined,
       team: searchParams.get("team")?.trim() || undefined,
       rarity: searchParams.get("rarity") ?? undefined,
@@ -39,39 +32,21 @@ export async function GET(request: Request): Promise<Response> {
       fav: searchParams.get("fav") ?? undefined,
     });
 
-    const cards = await getCardStore().getPaginated(page, pageSize, {
+    const stats = await getCardStore().getStats({
       search,
       team,
       rarity,
       position,
       fav: typeof fav === "string" ? fav === "true" : undefined,
     });
-    return jsonResponse(cards, 200);
+
+    return jsonResponse(stats, 200);
   } catch (error) {
     if (error instanceof ZodError) {
       return validationError(error);
     }
 
-    return jsonResponse({ error: "Unable to fetch cards." } satisfies ApiErrorPayload, 500);
-  }
-}
-
-export async function POST(request: Request): Promise<Response> {
-  try {
-    const payload = await request.json();
-    const createdCard = await getCardStore().create(payload);
-
-    return jsonResponse(createdCard, 201);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return badRequest("Invalid JSON body.");
-    }
-
-    if (error instanceof ZodError) {
-      return validationError(error);
-    }
-
-    return jsonResponse({ error: "Unable to create card." } satisfies ApiErrorPayload, 500);
+    return jsonResponse({ error: "Unable to fetch stats." } satisfies ApiErrorPayload, 500);
   }
 }
 

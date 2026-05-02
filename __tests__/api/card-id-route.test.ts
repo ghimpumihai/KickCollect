@@ -5,7 +5,7 @@ import { DELETE, GET, PUT } from "@/app/api/cards/[id]/route";
 import { getCardStore, resetCardStoreForTests } from "@/lib/server/card-store";
 import type { CardEntry } from "@/types/card";
 
-const BASE_URL = "http://localhost/api/cards";
+const BASE_URL = `${process.env.TEST_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:3000"}/api/cards`;
 
 function createRouteContext(id: string) {
   return {
@@ -24,8 +24,8 @@ function readJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-beforeEach(() => {
-  resetCardStoreForTests([
+beforeEach(async () => {
+  await resetCardStoreForTests([
     createMockCard({ id: 1, player: "One" }),
     createMockCard({ id: 2, player: "Two" }),
   ]);
@@ -75,7 +75,7 @@ describe("PUT /api/cards/[id]", () => {
     expect(body.id).toBe(1);
     expect(body.value).toBe("$30.00");
     expect(body.fav).toBe(true);
-    expect(getCardStore().getById(1)?.id).toBe(1);
+    expect((await getCardStore().getById(1))?.id).toBe(1);
   });
 
   it("returns 400 when update payload is invalid", async () => {
@@ -116,7 +116,7 @@ describe("DELETE /api/cards/[id]", () => {
     const response = await DELETE(new Request(`${BASE_URL}/1`, { method: "DELETE" }), createRouteContext("1"));
 
     expect(response.status).toBe(204);
-    expect(getCardStore().getById(1)).toBeUndefined();
+    expect(await getCardStore().getById(1)).toBeUndefined();
   });
 
   it("returns 404 when deleting unknown card", async () => {

@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Position {
+  GK
+  DEF
+  MID
+  FWD
+}
+
+enum Rarity {
+  Common
+  Uncommon
+  Rare
+  Epic
+  Legendary
+}
+
+enum Condition {
+  Mint
+  NearMint @map("Near Mint")
+  Good
+  Fair
+  Poor
+}
+
+model Card {
+  id         Int       @id
+  player     String
+  series     String
+  number     String
+  team       String
+  position   Position
+  year       Int
+  rarity     Rarity
+  condition  Condition
+  value      Decimal   @db.Decimal(10, 2)
+  dupes      Int
+  fav        Boolean
+
+  @@index([player])
+  @@index([series])
+  @@index([team])
+  @@index([position])
+  @@index([rarity])
+  @@index([condition])
+  @@index([fav])
+  @@map("cards")
+}

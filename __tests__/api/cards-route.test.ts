@@ -5,7 +5,7 @@ import { GET, POST } from "@/app/api/cards/route";
 import { getCardStore, resetCardStoreForTests } from "@/lib/server/card-store";
 import type { CardEntry } from "@/types/card";
 
-const BASE_URL = "http://localhost/api/cards";
+const BASE_URL = `${process.env.TEST_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:3000"}/api/cards`;
 
 function createValidCardPayload(overrides: Record<string, unknown> = {}) {
   const { id, ...payload } = createMockCard();
@@ -21,7 +21,7 @@ function readJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   const cards: CardEntry[] = [
     createMockCard({ id: 1, player: "One" }),
     createMockCard({ id: 2, player: "Two" }),
@@ -29,12 +29,12 @@ beforeEach(() => {
     createMockCard({ id: 4, player: "Four" }),
   ];
 
-  resetCardStoreForTests(cards);
+  await resetCardStoreForTests(cards);
 });
 
 describe("GET /api/cards", () => {
   it("returns paginated cards with metadata", async () => {
-    const response = GET(new Request(`${BASE_URL}?page=2&pageSize=2`));
+    const response = await GET(new Request(`${BASE_URL}?page=2&pageSize=2`));
     const body = await readJson<{
       items: CardEntry[];
       page: number;
@@ -52,7 +52,7 @@ describe("GET /api/cards", () => {
   });
 
   it("returns 400 when pagination query is invalid", async () => {
-    const response = GET(new Request(`${BASE_URL}?page=0&pageSize=2`));
+    const response = await GET(new Request(`${BASE_URL}?page=0&pageSize=2`));
     const body = await readJson<{ error: string; issues?: string[] }>(response);
 
     expect(response.status).toBe(400);
@@ -76,7 +76,16 @@ describe("POST /api/cards", () => {
     expect(body.id).toBe(5);
     expect(body.player).toBe("Created Card");
     expect(body.value).toBe("$22.50");
-    expect(getCardStore().getById(5)).toEqual(body);
+    expect(await getCardStore().getById(5)).toEqual(body);
+  });
+
+  it("filters cards by search term", async () => {
+    const response = await GET(new Request(`${BASE_URL}?search=three`));
+    const body = await readJson<{ items: CardEntry[] }>(response);
+
+    expect(response.status).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].player).toBe("Three");
   });
 
   it("returns 400 when body validation fails", async () => {

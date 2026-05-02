@@ -26,6 +26,11 @@ type CardProviderProps = {
 
 const CARDS_API_PATH = "/api/cards";
 const CARDS_PAGE_SIZE = 100;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+function buildApiUrl(path: string): string {
+  return API_BASE_URL.length > 0 ? `${API_BASE_URL}${path}` : path;
+}
 
 type ApiErrorPayload = {
   error?: string;
@@ -86,7 +91,7 @@ async function fetchAllCards(): Promise<CardEntry[]> {
 
   while (page <= totalPages) {
     const pageResponse = await requestJson<CardPaginationResponse>(
-      `${CARDS_API_PATH}?page=${page}&pageSize=${CARDS_PAGE_SIZE}`,
+      buildApiUrl(`${CARDS_API_PATH}?page=${page}&pageSize=${CARDS_PAGE_SIZE}`),
       {
         method: "GET",
         cache: "no-store",
@@ -128,7 +133,7 @@ export function CardProvider({ children }: CardProviderProps) {
 
   const createCard = useCallback(async (data: unknown): Promise<CardEntry> => {
     const created = await requestJson<CardEntry>(
-      CARDS_API_PATH,
+      buildApiUrl(CARDS_API_PATH),
       {
         method: "POST",
         headers: {
@@ -144,7 +149,7 @@ export function CardProvider({ children }: CardProviderProps) {
   }, []);
 
   const updateCard = useCallback(async (id: number, data: unknown): Promise<CardEntry | undefined> => {
-    const response = await fetch(`${CARDS_API_PATH}/${id}`, {
+    const response = await fetch(buildApiUrl(`${CARDS_API_PATH}/${id}`), {
       method: "PUT",
       headers: {
         "content-type": "application/json",
@@ -169,7 +174,7 @@ export function CardProvider({ children }: CardProviderProps) {
   }, []);
 
   const deleteCard = useCallback(async (id: number): Promise<boolean> => {
-    const response = await fetch(`${CARDS_API_PATH}/${id}`, {
+    const response = await fetch(buildApiUrl(`${CARDS_API_PATH}/${id}`), {
       method: "DELETE",
     });
 

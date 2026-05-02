@@ -1,0 +1,108 @@
+const path = require("node:path");
+const { loadEnvConfig } = require("@next/env");
+const { PrismaClient } = require("@prisma/client");
+
+loadEnvConfig(path.resolve(__dirname, ".."));
+
+const prisma = new PrismaClient();
+
+const seededCards = [
+  {
+    id: 1,
+    player: "Kylian Mbappé",
+    series: "Panini Prizm 2024",
+    number: "#012/150",
+    team: "Real Madrid",
+    position: "FWD",
+    year: 2024,
+    rarity: "Epic",
+    condition: "Mint",
+    value: "48.00",
+    dupes: 0,
+    fav: true,
+  },
+  {
+    id: 2,
+    player: "Erling Haaland",
+    series: "Topps Chrome 2023",
+    number: "#001/50",
+    team: "Man City",
+    position: "FWD",
+    year: 2023,
+    rarity: "Legendary",
+    condition: "Mint",
+    value: "210.00",
+    dupes: 0,
+    fav: true,
+  },
+  {
+    id: 3,
+    player: "Pedri",
+    series: "Panini Adrenalyn 2024",
+    number: "",
+    team: "Barcelona",
+    position: "MID",
+    year: 2024,
+    rarity: "Rare",
+    condition: "NearMint",
+    value: "12.50",
+    dupes: 2,
+    fav: false,
+  },
+  {
+    id: 4,
+    player: "Lamine Yamal",
+    series: "Topps Match Attax 2025",
+    number: "",
+    team: "Barcelona",
+    position: "FWD",
+    year: 2025,
+    rarity: "Uncommon",
+    condition: "Good",
+    value: "4.20",
+    dupes: 3,
+    fav: false,
+  },
+  {
+    id: 5,
+    player: "Gianluigi Donnarumma",
+    series: "Panini Prizm 2024",
+    number: "",
+    team: "PSG",
+    position: "GK",
+    year: 2024,
+    rarity: "Common",
+    condition: "Fair",
+    value: "1.00",
+    dupes: 0,
+    fav: false,
+  },
+  {
+    id: 6,
+    player: "Rodri",
+    series: "Topps Chrome 2024",
+    number: "",
+    team: "Man City",
+    position: "MID",
+    year: 2024,
+    rarity: "Rare",
+    condition: "NearMint",
+    value: "18.00",
+    dupes: 0,
+    fav: false,
+  },
+];
+
+async function main() {
+  await prisma.card.deleteMany();
+  await prisma.card.createMany({ data: seededCards });
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
