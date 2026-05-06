@@ -1,0 +1,14 @@
+
+> kickcollect@0.1.0 dev
+> next dev --hostname 0.0.0.0
+
+▲ Next.js 16.2.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env
+✓ Ready in 377ms
+
+ GET /api/cards?page=1&pageSize=100 200 in 496ms (next.js: 170ms, application-code: 326ms)
+ GET /collection 200 in 303ms (next.js: 76ms, application-code: 227ms)
+ GET /collection 200 in 37ms (next.js: 3ms, application-code: 35ms)
+ GET /api/cards?page=1&pageSize=100 200 in 11ms (next.js: 2ms, application-code: 9ms)

@@ -26,10 +26,35 @@ type CardProviderProps = {
 
 const CARDS_API_PATH = "/api/cards";
 const CARDS_PAGE_SIZE = 100;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+function getApiBaseUrl(): string {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+  if (typeof window === "undefined") {
+    return configuredBaseUrl;
+  }
+
+  if (configuredBaseUrl.length === 0) {
+    return window.location.origin;
+  }
+
+  try {
+    const configuredUrl = new URL(configuredBaseUrl);
+    const hostname = configuredUrl.hostname;
+
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+      return window.location.origin;
+    }
+  } catch {
+    return window.location.origin;
+  }
+
+  return configuredBaseUrl;
+}
 
 function buildApiUrl(path: string): string {
-  return API_BASE_URL.length > 0 ? `${API_BASE_URL}${path}` : path;
+  const baseUrl = getApiBaseUrl();
+  return baseUrl.length > 0 ? `${baseUrl}${path}` : path;
 }
 
 type ApiErrorPayload = {

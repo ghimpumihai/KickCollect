@@ -205,13 +205,14 @@ export class CardService {
       id,
     });
     const { id: _ignored, ...updateFields } = parsedUpdate;
+    const { condition, value, ...restUpdateFields } = updateFields;
 
     const updatedCard = await prisma.card.update({
       where: { id },
       data: {
-        ...updateFields,
-        ...(updateFields.condition ? { condition: toDbCondition(updateFields.condition) } : {}),
-        ...(updateFields.value ? { value: toDecimalValue(updateFields.value) } : {}),
+        ...restUpdateFields,
+        ...(condition ? { condition: toDbCondition(condition) } : {}),
+        ...(value ? { value: toDecimalValue(value) } : {}),
       },
     });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { CardProvider } from "@/lib/stores/card-context";
 import { UserInsightsProvider } from "@/lib/stores/user-insights-context";
@@ -11,8 +11,10 @@ type ProvidersProps = {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <UserInsightsProvider>
-      <CardProvider>{children}</CardProvider>
-    </UserInsightsProvider>
+    <Suspense fallback={null}>
+      <UserInsightsProvider>
+        <CardProvider>{children}</CardProvider>
+      </UserInsightsProvider>
+    </Suspense>
   );
 }
