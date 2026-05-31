@@ -65,20 +65,20 @@ export function Sidebar() {
         className={`kc-nav-item ${isDashboardActive ? "kc-active" : ""}`}
         aria-current={isDashboardActive ? "page" : undefined}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸ“Š</span> Dashboard
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>📊</span> Dashboard
       </Link>
       <Link
         href="/collection"
         className={`kc-nav-item ${isCollectionActive ? "kc-active" : ""}`}
         aria-current={isCollectionActive ? "page" : undefined}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸƒ</span> Collection
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>🃏</span> Collection
       </Link>
       <button type="button" className="kc-nav-item">
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸ“¦</span> Pack Shop
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>📦</span> Pack Shop
       </button>
       <button type="button" className="kc-nav-item">
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>â­</span> Wishlist
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>⭐</span> Wishlist
       </button>
 
       <div style={{ flex: 1 }} />
@@ -90,7 +90,7 @@ export function Sidebar() {
           void logout();
         }}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸšª</span> Log Out
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>🚪</span> Log Out
       </button>
     </aside>
   );
