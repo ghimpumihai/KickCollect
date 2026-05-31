@@ -1,5 +1,26 @@
 This is a [Next.js](https://nextjs.org) project backed by Prisma and PostgreSQL.
 
+## Supabase Setup
+
+Create a `.env` file in the project root with your Supabase Postgres URLs:
+
+```bash
+DATABASE_URL="postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+AUTH_SECRET="replace-me-for-shared-environments"
+AUTH_SESSION_IDLE_MINUTES="15"
+```
+
+- `DATABASE_URL` is used by the app runtime.
+- `DIRECT_URL` is used by Prisma migrate/seed to avoid pooler limitations.
+
+Then run:
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
 ## Getting Started
 
 First, start PostgreSQL and prepare the database:

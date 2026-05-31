@@ -7,7 +7,13 @@ import { prisma } from "@/lib/server/prisma";
 import type { AuthenticatedUser, AuthRole, SessionState } from "@/types/auth";
 
 const SESSION_COOKIE_NAME = "kc_session";
-const SESSION_IDLE_SECONDS = Number(process.env.AUTH_SESSION_IDLE_SECONDS ?? "10");
+const configuredIdleSeconds = Number(process.env.AUTH_SESSION_IDLE_SECONDS ?? "");
+const configuredIdleMinutes = Number(process.env.AUTH_SESSION_IDLE_MINUTES ?? "");
+const SESSION_IDLE_SECONDS = Number.isFinite(configuredIdleSeconds) && configuredIdleSeconds > 0
+  ? configuredIdleSeconds
+  : Number.isFinite(configuredIdleMinutes) && configuredIdleMinutes > 0
+    ? configuredIdleMinutes * 60
+    : 15 * 60;
 const SESSION_IDLE_TIMEOUT_MS = SESSION_IDLE_SECONDS * 1000;
 const SESSION_SECRET = process.env.AUTH_SECRET?.trim() || "kickcollect-dev-session-secret";
 const FORCE_SECURE_COOKIES = process.env.AUTH_COOKIE_SECURE === "true";
@@ -149,7 +155,7 @@ function createSessionCookieValue(payload: SessionCookiePayload): string {
 
 function createSessionCookieHeader(payload: SessionCookiePayload): string {
   const expiresAt = new Date(payload.expiresAt);
-  const maxAgeSeconds =  Date.now() + 10;
+  const maxAgeSeconds = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
 
   return serializeCookie(SESSION_COOKIE_NAME, createSessionCookieValue(payload), {
     expires: expiresAt,
