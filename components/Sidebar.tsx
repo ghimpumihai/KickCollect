@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useAuth } from "@/lib/stores/auth-context";
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { logout, session } = useAuth();
 
   const isDashboardActive = pathname === "/";
-  const isCollectionActive =
-    pathname === "/collection" || pathname.startsWith("/collection/");
-  const isAuthActive = pathname === "/auth" || pathname.startsWith("/auth/");
+  const isCollectionActive = pathname === "/collection" || pathname.startsWith("/collection/");
 
   return (
     <aside className="kc-sidebar">
@@ -30,36 +31,67 @@ export function Sidebar() {
         </span>
       </Link>
 
+      {session && (
+        <div
+          className="kc-glass-card"
+          style={{
+            marginBottom: 14,
+            padding: "12px 14px",
+            borderColor: "var(--kc-border)",
+            display: "grid",
+            gap: 4,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--kc-font-h)",
+              fontSize: 10,
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              color: "var(--kc-muted)",
+            }}
+          >
+            Signed in as
+          </span>
+          <span style={{ color: "var(--kc-text)", fontSize: 14, fontWeight: 600 }}>
+            {session.user.displayName}
+          </span>
+          <span style={{ color: "var(--kc-muted)", fontSize: 12 }}>{session.user.email}</span>
+        </div>
+      )}
+
       <Link
         href="/"
         className={`kc-nav-item ${isDashboardActive ? "kc-active" : ""}`}
         aria-current={isDashboardActive ? "page" : undefined}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>📊</span> Dashboard
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸ“Š</span> Dashboard
       </Link>
       <Link
         href="/collection"
         className={`kc-nav-item ${isCollectionActive ? "kc-active" : ""}`}
         aria-current={isCollectionActive ? "page" : undefined}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>🃏</span> Collection
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸƒ</span> Collection
       </Link>
       <button type="button" className="kc-nav-item">
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>📦</span> Pack Shop
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸ“¦</span> Pack Shop
       </button>
       <button type="button" className="kc-nav-item">
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>⭐</span> Wishlist
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>â­</span> Wishlist
       </button>
 
       <div style={{ flex: 1 }} />
 
-      <Link
-        href="/auth"
-        className={`kc-nav-item ${isAuthActive ? "kc-active" : ""}`}
-        aria-current={isAuthActive ? "page" : undefined}
+      <button
+        type="button"
+        className="kc-nav-item"
+        onClick={() => {
+          void logout();
+        }}
       >
-        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>🚪</span> Log Out
-      </Link>
+        <span style={{ width: 18, textAlign: "center", fontSize: 15 }}>ðŸšª</span> Log Out
+      </button>
     </aside>
   );
 }

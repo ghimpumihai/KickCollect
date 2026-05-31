@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AuthRole {
+  ADMIN
+  USER
+}
+
 enum Position {
   GK
   DEF
@@ -31,7 +36,7 @@ enum Condition {
 }
 
 model Card {
-  id         Int       @id
+  id         Int
   player     String
   series     String
   number     String
@@ -43,6 +48,11 @@ model Card {
   value      Decimal   @db.Decimal(10, 2)
   dupes      Int
   fav        Boolean
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId])
 
   @@index([player])
   @@index([series])
@@ -52,4 +62,35 @@ model Card {
   @@index([condition])
   @@index([fav])
   @@map("cards")
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  displayName  String
+  passwordHash String
+  role         AuthRole   @default(USER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sessions     Session[]
+  cards        Card[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  tokenHash      String    @unique
+  role           AuthRole  @default(USER)
+  userId         Int
+  expiresAt      DateTime
+  lastActivityAt DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
 }

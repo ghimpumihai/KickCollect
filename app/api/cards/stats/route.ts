@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 
+import { finalizeSessionResponse, validateUserSession } from "@/lib/auth/session";
 import { emptyResponse, jsonResponse } from "@/lib/server/api-response";
 import { getCardStore } from "@/lib/server/card-store";
 import { cardStatsQuerySchema } from "@/lib/validation/card-api-schema";
@@ -23,6 +24,11 @@ function validationError(error: ZodError): Response {
 
 export async function GET(request: Request): Promise<Response> {
   try {
+    const sessionResult = await validateUserSession(request);
+    if (!sessionResult.ok) {
+      return sessionResult.response;
+    }
+
     const searchParams = new URL(request.url).searchParams;
     const { search, team, rarity, position, fav } = cardStatsQuerySchema.parse({
       search: searchParams.get("search")?.trim() || undefined,
@@ -32,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
       fav: searchParams.get("fav") ?? undefined,
     });
 
-    const stats = await getCardStore().getStats({
+    const stats = await getCardStore().getStats(sessionResult.session.user.id, {
       search,
       team,
       rarity,
@@ -40,7 +46,7 @@ export async function GET(request: Request): Promise<Response> {
       fav: typeof fav === "string" ? fav === "true" : undefined,
     });
 
-    return jsonResponse(stats, 200);
+    return finalizeSessionResponse(jsonResponse(stats, 200), sessionResult);
   } catch (error) {
     if (error instanceof ZodError) {
       return validationError(error);

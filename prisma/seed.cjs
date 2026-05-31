@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { randomBytes, scryptSync } = require("node:crypto");
 const { loadEnvConfig } = require("@next/env");
 const { PrismaClient } = require("@prisma/client");
 
@@ -93,9 +94,42 @@ const seededCards = [
   },
 ];
 
+function hashPassword(password) {
+  const salt = randomBytes(16).toString("base64url");
+  const derivedKey = scryptSync(password, salt, 64);
+  return `${salt}:${derivedKey.toString("base64url")}`;
+}
+
 async function main() {
-  await prisma.card.deleteMany();
-  await prisma.card.createMany({ data: seededCards });
+  const demoUser = await prisma.user.upsert({
+    where: { email: "demo@kickcollect.local" },
+    update: {},
+    create: {
+      displayName: "Demo User",
+      email: "demo@kickcollect.local",
+      passwordHash: hashPassword("Password123"),
+      role: "USER",
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "admin@kickcollect.local" },
+    update: {},
+    create: {
+      displayName: "Admin User",
+      email: "admin@kickcollect.local",
+      passwordHash: hashPassword("Password123"),
+      role: "ADMIN",
+    },
+  });
+
+  await prisma.card.deleteMany({ where: { userId: demoUser.id } });
+  await prisma.card.createMany({
+    data: seededCards.map((card) => ({
+      ...card,
+      userId: demoUser.id,
+    })),
+  });
 }
 
 main()

@@ -2,6 +2,8 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import { buildApiUrl, createApiError, requestJson, type ErrorWithIssues } from "@/lib/client/api";
+import { useAuth } from "@/lib/stores/auth-context";
 import type { CardEntry } from "@/types/card";
 
 type CardReadContextValue = {
@@ -27,45 +29,6 @@ type CardProviderProps = {
 const CARDS_API_PATH = "/api/cards";
 const CARDS_PAGE_SIZE = 100;
 
-function getApiBaseUrl(): string {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
-
-  if (typeof window === "undefined") {
-    return configuredBaseUrl;
-  }
-
-  if (configuredBaseUrl.length === 0) {
-    return window.location.origin;
-  }
-
-  try {
-    const configuredUrl = new URL(configuredBaseUrl);
-    const hostname = configuredUrl.hostname;
-
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
-      return window.location.origin;
-    }
-  } catch {
-    return window.location.origin;
-  }
-
-  return configuredBaseUrl;
-}
-
-function buildApiUrl(path: string): string {
-  const baseUrl = getApiBaseUrl();
-  return baseUrl.length > 0 ? `${baseUrl}${path}` : path;
-}
-
-type ApiErrorPayload = {
-  error?: string;
-  issues?: string[];
-};
-
-type ErrorWithIssues = Error & {
-  issues?: Array<{ message: string }>;
-};
-
 type CardPaginationResponse = {
   items: CardEntry[];
   page: number;
@@ -73,41 +36,6 @@ type CardPaginationResponse = {
   totalItems: number;
   totalPages: number;
 };
-
-async function createApiError(response: Response, fallbackMessage: string): Promise<ErrorWithIssues> {
-  let payload: ApiErrorPayload | null = null;
-
-  try {
-    payload = (await response.json()) as ApiErrorPayload;
-  } catch {
-    payload = null;
-  }
-
-  const message = typeof payload?.error === "string" && payload.error.length > 0 ? payload.error : fallbackMessage;
-  const error = new Error(message) as ErrorWithIssues;
-
-  if (Array.isArray(payload?.issues)) {
-    const issues = payload.issues
-      .filter((issue): issue is string => typeof issue === "string" && issue.length > 0)
-      .map((issueMessage) => ({ message: issueMessage }));
-
-    if (issues.length > 0) {
-      error.issues = issues;
-    }
-  }
-
-  return error;
-}
-
-async function requestJson<T>(input: RequestInfo | URL, init: RequestInit, fallbackMessage: string): Promise<T> {
-  const response = await fetch(input, init);
-
-  if (!response.ok) {
-    throw await createApiError(response, fallbackMessage);
-  }
-
-  return (await response.json()) as T;
-}
 
 async function fetchAllCards(): Promise<CardEntry[]> {
   const cards: CardEntry[] = [];
@@ -120,6 +48,7 @@ async function fetchAllCards(): Promise<CardEntry[]> {
       {
         method: "GET",
         cache: "no-store",
+        credentials: "include",
       },
       "Unable to load cards.",
     );
@@ -133,11 +62,19 @@ async function fetchAllCards(): Promise<CardEntry[]> {
 }
 
 export function CardProvider({ children }: CardProviderProps) {
+  const { handleUnauthorized, status } = useAuth();
   const [cards, setCards] = useState<CardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (status !== "authenticated") {
+      setCards([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -145,37 +82,67 @@ export function CardProvider({ children }: CardProviderProps) {
       const nextCards = await fetchAllCards();
       setCards(nextCards);
     } catch (caughtError) {
+      const authError = caughtError as ErrorWithIssues;
+
+      if (authError.status === 401) {
+        handleUnauthorized("expired");
+      }
+
       setError(caughtError instanceof Error ? caughtError.message : "Failed to refresh cards.");
       throw caughtError;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleUnauthorized, status]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (status === "authenticated") {
+      void refresh().catch(() => {
+        // Auth redirects and user-facing errors are already handled inside refresh.
+        // Swallow effect-time rejections so an expected 401 does not surface as a runtime overlay.
+      });
+      return;
+    }
+
+    setCards([]);
+    setLoading(false);
+    setError(null);
+  }, [refresh, status]);
 
   const createCard = useCallback(async (data: unknown): Promise<CardEntry> => {
-    const created = await requestJson<CardEntry>(
-      buildApiUrl(CARDS_API_PATH),
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+    let created: CardEntry;
+
+    try {
+      created = await requestJson<CardEntry>(
+        buildApiUrl(CARDS_API_PATH),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(data),
         },
-        body: JSON.stringify(data),
-      },
-      "Unable to create card.",
-    );
+        "Unable to create card.",
+      );
+    } catch (caughtError) {
+      const authError = caughtError as ErrorWithIssues;
+
+      if (authError.status === 401) {
+        handleUnauthorized("expired");
+      }
+
+      throw caughtError;
+    }
 
     setCards((currentCards) => [...currentCards, created]);
     return created;
-  }, []);
+  }, [handleUnauthorized]);
 
   const updateCard = useCallback(async (id: number, data: unknown): Promise<CardEntry | undefined> => {
     const response = await fetch(buildApiUrl(`${CARDS_API_PATH}/${id}`), {
       method: "PUT",
+      credentials: "include",
       headers: {
         "content-type": "application/json",
       },
@@ -187,6 +154,10 @@ export function CardProvider({ children }: CardProviderProps) {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        handleUnauthorized("expired");
+      }
+
       throw await createApiError(response, "Unable to update card.");
     }
 
@@ -196,11 +167,12 @@ export function CardProvider({ children }: CardProviderProps) {
     );
 
     return updated;
-  }, []);
+  }, [handleUnauthorized]);
 
   const deleteCard = useCallback(async (id: number): Promise<boolean> => {
     const response = await fetch(buildApiUrl(`${CARDS_API_PATH}/${id}`), {
       method: "DELETE",
+      credentials: "include",
     });
 
     if (response.status === 404) {
@@ -208,12 +180,16 @@ export function CardProvider({ children }: CardProviderProps) {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        handleUnauthorized("expired");
+      }
+
       throw await createApiError(response, "Unable to delete card.");
     }
 
     setCards((currentCards) => currentCards.filter((currentCard) => currentCard.id !== id));
     return true;
-  }, []);
+  }, [handleUnauthorized]);
 
   const readValue = useMemo<CardReadContextValue>(
     () => ({

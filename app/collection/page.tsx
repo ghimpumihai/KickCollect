@@ -22,6 +22,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useCardActions, useCards } from "@/lib/stores/card-context";
+import { useAuth } from "@/lib/stores/auth-context";
 import { useUserInsights } from "@/lib/stores/user-insights-context";
 import type { Condition, Position, Rarity } from "@/types/card";
 
@@ -134,8 +135,10 @@ function getErrorMessage(caughtError: unknown): string {
 export default function CollectionPage() {
 	const { cards, loading, error, refresh } = useCards();
 	const { createCard } = useCardActions();
+	const { session } = useAuth();
 	const { preferences, setPageSizePreference, activity, recordActivity } =
 		useUserInsights();
+	const canCreate = session?.user.role === "ADMIN";
 	const [showCreateModal, setShowCreateModal] = useState(false);
 	const [form, setForm] = useState<CreateCardForm>(() =>
 		createInitialFormState(),
@@ -256,6 +259,9 @@ export default function CollectionPage() {
 	};
 
 	const openCreateModal = () => {
+		if (!canCreate) {
+			return;
+		}
 		setSubmitError(null);
 		setShowCreateModal(true);
 	};
@@ -286,6 +292,12 @@ export default function CollectionPage() {
 
 	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+
+		if (!canCreate) {
+			setSubmitError("Only admins can add cards.");
+			return;
+		}
+
 		setSubmitting(true);
 		setSubmitError(null);
 
@@ -385,9 +397,23 @@ export default function CollectionPage() {
 							type="button"
 							className="kc-btn kc-btn-em"
 							onClick={openCreateModal}
+							disabled={!canCreate}
+							title={canCreate ? "" : "Only admins can add cards."}
 						>
 							+ ADD CARD
 						</button>
+						{!canCreate && (
+							<p
+								style={{
+									margin: 0,
+									color: "var(--kc-muted)",
+									fontSize: 12,
+									letterSpacing: 0.2,
+								}}
+							>
+								Admin-only action
+							</p>
+						)}
 					</div>
 
 					{error && (

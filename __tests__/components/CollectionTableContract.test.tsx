@@ -11,6 +11,15 @@ vi.mock("@/components/Sidebar", () => ({
   Sidebar: () => <div data-testid="sidebar" />,
 }));
 
+vi.mock("@/lib/stores/auth-context", () => ({
+  useAuth: () => ({
+    session: {
+      user: { id: 1, email: "admin@example.com", displayName: "Admin", role: "ADMIN" },
+      expiresAt: new Date(Date.now() + 1000 * 60).toISOString(),
+    },
+  }),
+}));
+
 vi.mock("@/lib/stores/card-context", () => ({
   useCards: () => ({
     cards: [

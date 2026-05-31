@@ -1,8 +1,26 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
+async function registerUser(page: Page, suffix: string): Promise<void> {
+  await page.goto("/auth");
+  await page.getByRole("button", { name: "Register" }).click();
+  await page.getByLabel("Display Name").fill(`Playwright User ${suffix}`);
+  await page.getByLabel("Email").fill(`playwright-${suffix}@example.com`);
+  await page.getByLabel("Password").fill("Password123");
+  await page.getByRole("button", { name: "Register & Continue" }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+}
 
-  test("stores page size preference in cookies", async ({ page, context }) => {
-    await page.goto("/collection");
+async function loginAdmin(page: Page): Promise<void> {
+  await page.goto("/auth");
+  await page.getByLabel("Email").fill("admin@kickcollect.local");
+  await page.getByLabel("Password").fill("Password123");
+  await page.getByRole("button", { name: "Secure Login" }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+}
+
+test.describe("assignment features", () => {
+  test("stores page size preference in cookies after secure registration", async ({ page, context }) => {
+    await registerUser(page, `prefs-${Date.now()}`);
     await page.locator("#collection-page-size").selectOption("10");
 
     const cookies = await context.cookies();
@@ -10,8 +28,8 @@ import { expect, test } from "@playwright/test";
     expect(prefCookie?.value).toBe("10");
   });
 
-  test("creates a new card from the collection page", async ({ page }) => {
-    await page.goto("/collection");
+  test("creates a new card from the protected collection page", async ({ page }) => {
+    await loginAdmin(page);
     await page.getByRole("button", { name: "+ ADD CARD" }).click();
 
     await page.locator("#create-player").fill("Playwright Star");
@@ -24,13 +42,13 @@ import { expect, test } from "@playwright/test";
 
     await page.getByRole("button", { name: "Create Card" }).click();
 
-    await expect(page.getByText("Showing 7 of 7 cards")).toBeVisible();
+    await expect(page.getByText(/Showing\s+7\s+of\s+7\s+cards/i)).toBeVisible();
     await page.getByRole("button", { name: "2" }).click();
     await expect(page.getByRole("link", { name: "Playwright Star" })).toBeVisible();
   });
 
-  test("persists CRUD data across refresh (sessionStorage)", async ({ page }) => {
-    await page.goto("/collection");
+  test("persists CRUD data across refresh for an authenticated user", async ({ page }) => {
+    await loginAdmin(page);
     await page.getByRole("button", { name: "+ ADD CARD" }).click();
 
     await page.locator("#create-player").fill("Refresh Persisted");
@@ -51,6 +69,7 @@ import { expect, test } from "@playwright/test";
   });
 
   test("updates an existing card from detail view", async ({ page }) => {
+    await registerUser(page, `update-${Date.now()}`);
     await page.goto("/card/1");
     await page.getByRole("button", { name: /edit card/i }).click();
     await expect(page.getByRole("heading", { name: "Edit Card" })).toBeVisible();
@@ -62,10 +81,12 @@ import { expect, test } from "@playwright/test";
   });
 
   test("deletes an existing card from detail view", async ({ page }) => {
+    await registerUser(page, `delete-${Date.now()}`);
     await page.goto("/card/6");
-    await page.getByRole("button", { name: "🗑 Delete" }).click();
+    await page.getByRole("button", { name: /delete/i }).click();
     await page.getByRole("button", { name: "Confirm delete" }).click();
 
     await expect(page).toHaveURL(/\/collection$/);
     await expect(page.getByRole("link", { name: "Rodri" })).toHaveCount(0);
   });
+});

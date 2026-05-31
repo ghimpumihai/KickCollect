@@ -6,32 +6,34 @@ First, start PostgreSQL and prepare the database:
 
 ```bash
 docker compose up -d postgres
-npx prisma migrate dev
-npx prisma db seed
+npm run db:migrate
+npm run db:seed
 ```
 
 Then run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open the app from the host you are using. If the client runs on a different machine than the server, set `NEXT_PUBLIC_API_BASE_URL` to the server origin, for example `http://192.168.1.20:3000`.
+`npm run dev` starts Next.js on `0.0.0.0` over HTTP so the app can be opened easily from another device on the same LAN.
+
+If you need the secure development variant, run:
+
+```bash
+npm run dev:https
+```
+
+Register a user from `/auth` before opening `/collection` or `/card/[id]`. These routes and the `/api/cards*` endpoints are protected by a signed HTTP-only session cookie with inactivity expiry.
+
+Optional environment variables:
+
+```bash
+AUTH_SECRET="replace-me-for-shared-environments"
+AUTH_SESSION_IDLE_MINUTES="15"
+```
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-Database notes:
-
-```txt
-DATABASE_URL="postgresql://kickcollect:kickcollect@localhost:5432/kickcollect?schema=public"
-NEXT_PUBLIC_API_BASE_URL="http://localhost:3000"
-```
 
 The cards database is created and populated through Prisma migrations and seeds, not by manual SQL tables.
 

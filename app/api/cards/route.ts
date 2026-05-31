@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 
+import { finalizeSessionResponse, validateUserSession } from "@/lib/auth/session";
 import { emptyResponse, jsonResponse } from "@/lib/server/api-response";
 import { getCardStore } from "@/lib/server/card-store";
 import { cardListQuerySchema } from "@/lib/validation/card-api-schema";
@@ -16,6 +17,11 @@ function badRequest(message: string): Response {
   return jsonResponse(payload, 400);
 }
 
+function forbidden(message: string): Response {
+  const payload: ApiErrorPayload = { error: message };
+  return jsonResponse(payload, 403);
+}
+
 function validationError(error: ZodError): Response {
   return jsonResponse(
     {
@@ -28,6 +34,11 @@ function validationError(error: ZodError): Response {
 
 export async function GET(request: Request): Promise<Response> {
   try {
+    const sessionResult = await validateUserSession(request);
+    if (!sessionResult.ok) {
+      return sessionResult.response;
+    }
+
     const searchParams = new URL(request.url).searchParams;
     const { page, pageSize, search, team, rarity, position, fav } = cardListQuerySchema.parse({
       page: searchParams.get("page") ?? undefined,
@@ -39,14 +50,14 @@ export async function GET(request: Request): Promise<Response> {
       fav: searchParams.get("fav") ?? undefined,
     });
 
-    const cards = await getCardStore().getPaginated(page, pageSize, {
+    const cards = await getCardStore().getPaginated(sessionResult.session.user.id, page, pageSize, {
       search,
       team,
       rarity,
       position,
       fav: typeof fav === "string" ? fav === "true" : undefined,
     });
-    return jsonResponse(cards, 200);
+    return finalizeSessionResponse(jsonResponse(cards, 200), sessionResult);
   } catch (error) {
     if (error instanceof ZodError) {
       return validationError(error);
@@ -58,10 +69,19 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const payload = await request.json();
-    const createdCard = await getCardStore().create(payload);
+    const sessionResult = await validateUserSession(request);
+    if (!sessionResult.ok) {
+      return sessionResult.response;
+    }
 
-    return jsonResponse(createdCard, 201);
+    if (sessionResult.session.user.role !== "ADMIN") {
+      return finalizeSessionResponse(forbidden("Only admins can add cards."), sessionResult);
+    }
+
+    const payload = await request.json();
+    const createdCard = await getCardStore().create(sessionResult.session.user.id, payload);
+
+    return finalizeSessionResponse(jsonResponse(createdCard, 201), sessionResult);
   } catch (error) {
     if (error instanceof SyntaxError) {
       return badRequest("Invalid JSON body.");

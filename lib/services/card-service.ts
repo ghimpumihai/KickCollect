@@ -50,8 +50,8 @@ function toDecimalValue(value: string): Prisma.Decimal {
   return new Prisma.Decimal(normalizedValue);
 }
 
-function buildWhere(filters: CardFilters = {}): Prisma.CardWhereInput {
-  const clauses: Prisma.CardWhereInput[] = [];
+function buildWhere(userId: number, filters: CardFilters = {}): Prisma.CardWhereInput {
+  const clauses: Prisma.CardWhereInput[] = [{ userId }];
 
   if (filters.search && filters.search.trim().length > 0) {
     const search = filters.search.trim();
@@ -121,8 +121,8 @@ function mapCardRecord(card: {
 }
 
 export class CardService {
-  async reset(initialCards: CardEntry[] = seededCards): Promise<void> {
-    await prisma.card.deleteMany();
+  async reset(userId: number, initialCards: CardEntry[] = seededCards): Promise<void> {
+    await prisma.card.deleteMany({ where: { userId } });
 
     if (initialCards.length === 0) {
       return;
@@ -131,15 +131,16 @@ export class CardService {
     await prisma.card.createMany({
       data: initialCards.map((card) => ({
         ...card,
+        userId,
         condition: toDbCondition(card.condition),
         value: toDecimalValue(card.value),
       })),
     });
   }
 
-  async getAll(filters: CardFilters = {}): Promise<CardEntry[]> {
+  async getAll(userId: number, filters: CardFilters = {}): Promise<CardEntry[]> {
     const cards = await prisma.card.findMany({
-      where: buildWhere(filters),
+      where: buildWhere(userId, filters),
       orderBy: { id: "asc" },
     });
 
@@ -147,11 +148,12 @@ export class CardService {
   }
 
   async getPaginated(
+    userId: number,
     page: number,
     pageSize: number,
     filters: CardFilters = {},
   ): Promise<CardPaginationResult> {
-    const where = buildWhere(filters);
+    const where = buildWhere(userId, filters);
     const [totalItems, cards] = await prisma.$transaction([
       prisma.card.count({ where }),
       prisma.card.findMany({
@@ -171,19 +173,24 @@ export class CardService {
     };
   }
 
-  async getById(id: number): Promise<CardEntry | undefined> {
-    const card = await prisma.card.findUnique({ where: { id } });
+  async getById(userId: number, id: number): Promise<CardEntry | undefined> {
+    const card = await prisma.card.findUnique({
+      where: {
+        userId_id: { userId, id },
+      },
+    });
     return card ? mapCardRecord(card) : undefined;
   }
 
-  async create(data: unknown): Promise<CardEntry> {
+  async create(userId: number, data: unknown): Promise<CardEntry> {
     const parsedCard = createCardSchema.parse(data);
-    const nextId = parsedCard.id ?? (await this.generateNextId());
+    const nextId = parsedCard.id ?? (await this.generateNextId(userId));
 
     const createdCard = await prisma.card.create({
       data: {
         id: nextId,
         ...parsedCard,
+        userId,
         condition: toDbCondition(parsedCard.condition),
         value: toDecimalValue(parsedCard.value),
       },
@@ -192,8 +199,12 @@ export class CardService {
     return mapCardRecord(createdCard);
   }
 
-  async update(id: number, data: unknown): Promise<CardEntry | undefined> {
-    const cardIndex = await prisma.card.findUnique({ where: { id } });
+  async update(userId: number, id: number, data: unknown): Promise<CardEntry | undefined> {
+    const cardIndex = await prisma.card.findUnique({
+      where: {
+        userId_id: { userId, id },
+      },
+    });
 
     if (!cardIndex) {
       return undefined;
@@ -208,7 +219,9 @@ export class CardService {
     const { condition, value, ...restUpdateFields } = updateFields;
 
     const updatedCard = await prisma.card.update({
-      where: { id },
+      where: {
+        userId_id: { userId, id },
+      },
       data: {
         ...restUpdateFields,
         ...(condition ? { condition: toDbCondition(condition) } : {}),
@@ -219,19 +232,27 @@ export class CardService {
     return mapCardRecord(updatedCard);
   }
 
-  async delete(id: number): Promise<boolean> {
-    const existingCard = await prisma.card.findUnique({ where: { id } });
+  async delete(userId: number, id: number): Promise<boolean> {
+    const existingCard = await prisma.card.findUnique({
+      where: {
+        userId_id: { userId, id },
+      },
+    });
     if (!existingCard) {
       return false;
     }
 
-    await prisma.card.delete({ where: { id } });
+    await prisma.card.delete({
+      where: {
+        userId_id: { userId, id },
+      },
+    });
     return true;
   }
 
-  async getStats(filters: CardFilters = {}): Promise<CardStats> {
+  async getStats(userId: number, filters: CardFilters = {}): Promise<CardStats> {
     const cards = await prisma.card.findMany({
-      where: buildWhere(filters),
+      where: buildWhere(userId, filters),
       orderBy: { id: "asc" },
     });
 
@@ -258,8 +279,9 @@ export class CardService {
     };
   }
 
-  private async generateNextId(): Promise<number> {
+  private async generateNextId(userId: number): Promise<number> {
     const aggregate = await prisma.card.aggregate({
+      where: { userId },
       _max: { id: true },
     });
 
