@@ -13,7 +13,7 @@ const SESSION_IDLE_SECONDS = Number.isFinite(configuredIdleSeconds) && configure
   ? configuredIdleSeconds
   : Number.isFinite(configuredIdleMinutes) && configuredIdleMinutes > 0
     ? configuredIdleMinutes * 60
-    : 15 * 60;
+    : 10;
 const SESSION_IDLE_TIMEOUT_MS = SESSION_IDLE_SECONDS * 1000;
 const SESSION_SECRET = process.env.AUTH_SECRET?.trim() || "kickcollect-dev-session-secret";
 const FORCE_SECURE_COOKIES = process.env.AUTH_COOKIE_SECURE === "true";

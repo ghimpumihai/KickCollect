@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  useCallback,
   createContext,
   startTransition,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -43,7 +43,6 @@ const SESSION_API_PATH = "/api/auth/session";
 const LOGIN_API_PATH = "/api/auth/login";
 const REGISTER_API_PATH = "/api/auth/register";
 const LOGOUT_API_PATH = "/api/auth/logout";
-const KEEP_ALIVE_INTERVAL_MS = 5 * 1000;
 
 function isProtectedPath(pathname: string | null): boolean {
   return pathname === "/collection" || pathname?.startsWith("/card/") === true;
@@ -73,57 +72,79 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const [session, setSession] = useState<SessionState | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
-  const lastKeepAliveAtRef = useRef(0);
-  const keepAliveInFlightRef = useRef(false);
+  const sessionVersionRef = useRef(0);
 
-  const redirectToAuth = useCallback((reason?: "expired" | "required") => {
-    setSession(null);
-    setStatus("unauthenticated");
+  const invalidatePendingSessionReads = useCallback(() => {
+    sessionVersionRef.current += 1;
+    return sessionVersionRef.current;
+  }, []);
 
-    if (pathname === "/auth") {
-      return;
-    }
-
-    startTransition(() => {
-      router.replace(toAuthRedirect(pathname, reason));
-    });
-  }, [pathname, router]);
-
-  const refreshSession = useCallback(async (method: "GET" | "POST" = "GET"): Promise<SessionState | null> => {
-    try {
-      const nextSession = await requestJson<SessionState>(
-        buildApiUrl(SESSION_API_PATH),
-        {
-          method,
-          cache: "no-store",
-          credentials: "include",
-        },
-        "Unable to restore your session.",
-      );
-
-      setSession(nextSession);
-      setStatus("authenticated");
-      lastKeepAliveAtRef.current = Date.now();
-      return nextSession;
-    } catch (caughtError) {
-      const authError = caughtError as ErrorWithIssues;
-
-      if (authError.status === 401) {
-        if (method === "POST" || isProtectedPath(pathname)) {
-          redirectToAuth(method === "POST" ? "expired" : "required");
-        } else {
-          setSession(null);
-          setStatus("unauthenticated");
-        }
-
-        return null;
-      }
-
+  const redirectToAuth = useCallback(
+    (reason?: "expired" | "required") => {
+      invalidatePendingSessionReads();
       setSession(null);
       setStatus("unauthenticated");
-      throw caughtError;
-    }
-  }, [pathname, redirectToAuth]);
+
+      if (pathname === "/auth") {
+        return;
+      }
+
+      startTransition(() => {
+        router.replace(toAuthRedirect(pathname, reason));
+      });
+    },
+    [invalidatePendingSessionReads, pathname, router],
+  );
+
+  const refreshSession = useCallback(
+    async (method: "GET" | "POST" = "GET"): Promise<SessionState | null> => {
+      const requestVersion = sessionVersionRef.current;
+
+      try {
+        const nextSession = await requestJson<SessionState>(
+          buildApiUrl(SESSION_API_PATH),
+          {
+            method,
+            cache: "no-store",
+            credentials: "include",
+          },
+          "Unable to restore your session.",
+        );
+
+        if (requestVersion !== sessionVersionRef.current) {
+          return null;
+        }
+
+        setSession(nextSession);
+        setStatus("authenticated");
+        return nextSession;
+      } catch (caughtError) {
+        if (requestVersion !== sessionVersionRef.current) {
+          return null;
+        }
+
+        const authError = caughtError as ErrorWithIssues;
+
+        if (authError.status === 401) {
+          const hasAuthenticatedSession = session !== null || status === "authenticated";
+
+          if (method === "POST" || hasAuthenticatedSession || isProtectedPath(pathname)) {
+            redirectToAuth(method === "POST" ? "expired" : "required");
+          } else {
+            setSession(null);
+            setStatus("unauthenticated");
+          }
+
+          return null;
+        }
+
+        setSession(null);
+        setStatus("unauthenticated");
+        throw caughtError;
+      }
+    },
+    [pathname, redirectToAuth, session, status],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -162,42 +183,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [redirectToAuth, session]);
 
-  useEffect(() => {
-    if (status !== "authenticated") {
-      return;
-    }
-
-    const keepAlive = () => {
-      if (keepAliveInFlightRef.current) {
-        return;
-      }
-
-      if (Date.now() - lastKeepAliveAtRef.current < KEEP_ALIVE_INTERVAL_MS) {
-        return;
-      }
-
-      keepAliveInFlightRef.current = true;
-
-      void refreshSession("POST").finally(() => {
-        keepAliveInFlightRef.current = false;
-      });
-    };
-
-    const listenerOptions: AddEventListenerOptions = { passive: true };
-    const eventNames: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "touchstart"];
-
-    for (const eventName of eventNames) {
-      window.addEventListener(eventName, keepAlive, listenerOptions);
-    }
-
-    return () => {
-      for (const eventName of eventNames) {
-        window.removeEventListener(eventName, keepAlive, listenerOptions);
-      }
-    };
-  }, [refreshSession, status]);
-
   const login = useCallback(async (payload: CredentialsPayload): Promise<SessionState> => {
+    invalidatePendingSessionReads();
+
     const nextSession = await requestJson<SessionState>(
       buildApiUrl(LOGIN_API_PATH),
       {
@@ -213,11 +201,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setSession(nextSession);
     setStatus("authenticated");
-    lastKeepAliveAtRef.current = Date.now();
     return nextSession;
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload): Promise<SessionState> => {
+    invalidatePendingSessionReads();
+
     const nextSession = await requestJson<SessionState>(
       buildApiUrl(REGISTER_API_PATH),
       {
@@ -233,33 +222,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setSession(nextSession);
     setStatus("authenticated");
-    lastKeepAliveAtRef.current = Date.now();
     return nextSession;
   }, []);
 
-  const logout = useCallback(async (redirectPath = "/auth"): Promise<void> => {
-    try {
-      const response = await fetch(buildApiUrl(LOGOUT_API_PATH), {
-        method: "POST",
-        credentials: "include",
-      });
+  const logout = useCallback(
+    async (redirectPath = "/auth"): Promise<void> => {
+      invalidatePendingSessionReads();
 
-      if (!response.ok && response.status !== 401) {
-        throw await createApiError(response, "Unable to log out.");
+      try {
+        const response = await fetch(buildApiUrl(LOGOUT_API_PATH), {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!response.ok && response.status !== 401) {
+          throw await createApiError(response, "Unable to log out.");
+        }
+      } finally {
+        setSession(null);
+        setStatus("unauthenticated");
+
+        startTransition(() => {
+          router.replace(redirectPath);
+        });
       }
-    } finally {
-      setSession(null);
-      setStatus("unauthenticated");
+    },
+    [invalidatePendingSessionReads, router],
+  );
 
-      startTransition(() => {
-        router.replace(redirectPath);
-      });
-    }
-  }, [router]);
-
-  const handleUnauthorized = useCallback((reason?: "expired" | "required") => {
-    redirectToAuth(reason ?? "expired");
-  }, [redirectToAuth]);
+  const handleUnauthorized = useCallback(
+    (reason?: "expired" | "required") => {
+      redirectToAuth(reason ?? "expired");
+    },
+    [redirectToAuth],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
