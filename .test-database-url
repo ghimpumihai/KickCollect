@@ -1,0 +1,1 @@
+postgresql://kickcollect:kickcollect@localhost:32788/kickcollect_test?schema=public

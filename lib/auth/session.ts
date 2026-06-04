@@ -13,7 +13,7 @@ const SESSION_IDLE_SECONDS = Number.isFinite(configuredIdleSeconds) && configure
   ? configuredIdleSeconds
   : Number.isFinite(configuredIdleMinutes) && configuredIdleMinutes > 0
     ? configuredIdleMinutes * 60
-    : 10;
+    : 1000000;
 const SESSION_IDLE_TIMEOUT_MS = SESSION_IDLE_SECONDS * 1000;
 const SESSION_SECRET = process.env.AUTH_SECRET?.trim() || "kickcollect-dev-session-secret";
 const FORCE_SECURE_COOKIES = process.env.AUTH_COOKIE_SECURE === "true";
@@ -231,11 +231,45 @@ export function readSessionFromCookieHeader(cookieHeader: string | null | undefi
 }
 
 async function removeSessionByToken(token: string): Promise<void> {
-  await prisma.session.deleteMany({
+  await retryPreparedStatementOnce(() => prisma.session.deleteMany({
     where: {
       tokenHash: hashToken(token),
     },
-  });
+  }));
+}
+
+function isPreparedStatementMissingError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  const errorWithCause = error as { cause?: unknown };
+  const cause =
+    typeof errorWithCause.cause === "object" && errorWithCause.cause !== null
+      ? errorWithCause.cause as { code?: unknown; message?: unknown }
+      : null;
+
+  return (
+    message.includes("prepared statement") && message.includes("does not exist")
+  ) || cause?.code === "26000" || (
+    typeof cause?.message === "string" &&
+    cause.message.includes("prepared statement") &&
+    cause.message.includes("does not exist")
+  );
+}
+
+async function retryPreparedStatementOnce<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isPreparedStatementMissingError(error)) {
+      throw error;
+    }
+
+    await prisma.$disconnect();
+    return operation();
+  }
 }
 
 export async function createSessionForUser(user: Pick<User, "id" | "email" | "displayName" | "role">): Promise<{
@@ -292,14 +326,14 @@ export async function validateUserSession(request: Request): Promise<SessionVali
     };
   }
 
-  const sessionRecord = await prisma.session.findUnique({
+  const sessionRecord = await retryPreparedStatementOnce(() => prisma.session.findUnique({
     where: {
       tokenHash: hashToken(cookiePayload.token),
     },
     include: {
       user: true,
     },
-  });
+  }));
 
   if (
     !sessionRecord ||
@@ -310,11 +344,11 @@ export async function validateUserSession(request: Request): Promise<SessionVali
     sessionRecord.expiresAt.getTime() <= now
   ) {
     if (sessionRecord) {
-      await prisma.session.delete({
+      await retryPreparedStatementOnce(() => prisma.session.delete({
         where: {
           id: sessionRecord.id,
         },
-      });
+      }));
     }
 
     return {
@@ -324,7 +358,7 @@ export async function validateUserSession(request: Request): Promise<SessionVali
   }
 
   const refreshedExpiry = getSessionExpiry();
-  const updatedSession = await prisma.session.update({
+  const updatedSession = await retryPreparedStatementOnce(() => prisma.session.update({
     where: {
       id: sessionRecord.id,
     },
@@ -335,7 +369,7 @@ export async function validateUserSession(request: Request): Promise<SessionVali
     include: {
       user: true,
     },
-  });
+  }));
 
   const session = {
     user: toAuthenticatedUser(updatedSession.user),

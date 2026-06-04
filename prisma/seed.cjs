@@ -101,24 +101,35 @@ function hashPassword(password) {
 }
 
 async function main() {
+  const demoPasswordHash = hashPassword("Password123");
+  const adminPasswordHash = hashPassword("Password123");
+
   const demoUser = await prisma.user.upsert({
     where: { email: "demo@kickcollect.local" },
-    update: {},
+    update: {
+      displayName: "Demo User",
+      passwordHash: demoPasswordHash,
+      role: "USER",
+    },
     create: {
       displayName: "Demo User",
       email: "demo@kickcollect.local",
-      passwordHash: hashPassword("Password123"),
+      passwordHash: demoPasswordHash,
       role: "USER",
     },
   });
 
   await prisma.user.upsert({
     where: { email: "admin@kickcollect.local" },
-    update: {},
+    update: {
+      displayName: "Admin User",
+      passwordHash: adminPasswordHash,
+      role: "ADMIN",
+    },
     create: {
       displayName: "Admin User",
       email: "admin@kickcollect.local",
-      passwordHash: hashPassword("Password123"),
+      passwordHash: adminPasswordHash,
       role: "ADMIN",
     },
   });

@@ -43,6 +43,7 @@ const SESSION_API_PATH = "/api/auth/session";
 const LOGIN_API_PATH = "/api/auth/login";
 const REGISTER_API_PATH = "/api/auth/register";
 const LOGOUT_API_PATH = "/api/auth/logout";
+const KEEP_ALIVE_INTERVAL_MS = 60 * 1000;
 
 function isProtectedPath(pathname: string | null): boolean {
   return pathname === "/collection" || pathname?.startsWith("/card/") === true;
@@ -73,6 +74,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<SessionState | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const sessionVersionRef = useRef(0);
+  const lastKeepAliveAtRef = useRef(0);
+  const keepAliveInFlightRef = useRef(false);
 
   const invalidatePendingSessionReads = useCallback(() => {
     sessionVersionRef.current += 1;
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setSession(nextSession);
         setStatus("authenticated");
+        lastKeepAliveAtRef.current = Date.now();
         return nextSession;
       } catch (caughtError) {
         if (requestVersion !== sessionVersionRef.current) {
@@ -183,6 +187,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [redirectToAuth, session]);
 
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+
+    const keepSessionAlive = () => {
+      if (keepAliveInFlightRef.current || Date.now() - lastKeepAliveAtRef.current < KEEP_ALIVE_INTERVAL_MS) {
+        return;
+      }
+
+      keepAliveInFlightRef.current = true;
+
+      void refreshSession("POST").finally(() => {
+        keepAliveInFlightRef.current = false;
+      });
+    };
+
+    const listenerOptions: AddEventListenerOptions = { passive: true };
+    const eventNames: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "touchstart"];
+
+    for (const eventName of eventNames) {
+      window.addEventListener(eventName, keepSessionAlive, listenerOptions);
+    }
+
+    return () => {
+      for (const eventName of eventNames) {
+        window.removeEventListener(eventName, keepSessionAlive, listenerOptions);
+      }
+    };
+  }, [refreshSession, status]);
+
   const login = useCallback(async (payload: CredentialsPayload): Promise<SessionState> => {
     invalidatePendingSessionReads();
 
@@ -201,8 +236,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setSession(nextSession);
     setStatus("authenticated");
+    lastKeepAliveAtRef.current = Date.now();
     return nextSession;
-  }, []);
+  }, [invalidatePendingSessionReads]);
 
   const register = useCallback(async (payload: RegisterPayload): Promise<SessionState> => {
     invalidatePendingSessionReads();
@@ -222,8 +258,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setSession(nextSession);
     setStatus("authenticated");
+    lastKeepAliveAtRef.current = Date.now();
     return nextSession;
-  }, []);
+  }, [invalidatePendingSessionReads]);
 
   const logout = useCallback(
     async (redirectPath = "/auth"): Promise<void> => {
